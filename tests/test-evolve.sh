@@ -16,6 +16,7 @@ cleanup() {
   rm -f "$REPO_ROOT/evolution/.state/git-untracked-skill.txt"
   rm -f "$REPO_ROOT/evolution/.state/corrupt-skill.txt"
   rm -rf "$REPO_ROOT/evolution/.state/.sessions"
+  rm -f "$HOME/.agents/skills/track-skill"
 }
 trap cleanup EXIT
 
