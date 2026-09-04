@@ -56,8 +56,16 @@ Workflow({
 ```
 
 `workflow.mjs`가 각 단계(preflight/plan/critique/consensus/implement/validate/review/
-decision/report)를 순서대로 실행하고 산출물을 `nimbalyst-local/plans/adversarial-dev/<slug>/`
-아래에 쓴다. 스크립트가 반환하는 최종 상태(`pass`/`iterate 중단`/`maxRounds 초과`)를
+decision/report)를 순서대로 실행하고 대부분의 산출물(plan.md/critique.md/consensus-plan.md/
+subtasks.json/validation-*.md/review-round-*.md)을 각 단계 서브에이전트가 직접
+`nimbalyst-local/plans/adversarial-dev/<slug>/` 아래에 쓴다.
+
+**`report.md`만은 예외**: 하네스가 "report/summary 형태 파일은 서브에이전트가 쓸 수 없음"
+정책으로 서브에이전트의 Write를 막기 때문에, `workflow.mjs`는 `report.md`를 파일로 쓰지
+않고 반환값의 `report` 문자열로만 돌려준다. **Workflow 호출이 끝나면 이 오케스트레이터
+(나)가 직접 `Write` 툴로 그 문자열을 `<반환된 dir>/report.md`에 저장한다.**
+
+스크립트가 반환하는 최종 상태(`pass`/`needs-user-decision`/`iterate-stopped`/`aborted`)를
 사용자에게 한 줄로 요약해 보고한다 — Codex/리뷰 원시 출력을 그대로 덤프하지 않는다.
 
 폴백 경로(2번)를 탄 경우, `workflow.mjs`를 실행 가능한 스크립트가 아니라 **절차서로

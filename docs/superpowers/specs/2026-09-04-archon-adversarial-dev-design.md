@@ -105,16 +105,18 @@ preflight → plan → critique → consensus(+subtask 분할) → implement(wav
 
 ### Codex 호출 규칙 (cc-loop과 동일한 제약, Workflow `agent()`로 승계)
 
-- Codex 호출은 Workflow `agent()`의 `opts.agentType: "codex:codex-rescue"`로 스폰한다. **구현 전 검증 필요**: 이 경로가 cc-loop이 요구하는 `CLAUDE_PLUGIN_ROOT` 환경을 그대로 보장하는지 미확인 — plan 단계에서 read-only ping 서브태스크 하나로 먼저 검증하고, 실패하면 Workflow 방식을 접고 SKILL.md 절차서(기존 Agent tool 직접 호출) 방식으로 폴백한다(아래 "리스크" 참조).
+- Codex 호출은 Workflow `agent()`의 `opts.agentType: "codex:codex-rescue"`로 스폰한다. 실제 end-to-end 실행으로 검증 완료 — `CLAUDE_PLUGIN_ROOT` 환경 문제 없음(아래 "검증 이력" 참조).
 - 서브에이전트 기본값은 `--write`이므로, 파일 수정이 필요 없는 호출(critique/review)에는 프롬프트 첫 줄에 `read-only, research/critique only, do not edit files`를 반드시 명시한다.
-- 스레드 연속성: `--fresh`(critique) / `--resume`(implement)을 프롬프트에 명시. resume은 best-effort이므로 `implement` 프롬프트에는 항상 해당 서브태스크의 설명 + 전체 합의 계획을 함께 싣는다.
+- 스레드 연속성: `critique`는 `--fresh`. **`implement`도 항상 `--fresh`** — 처음엔 `--resume`(같은 스레드 이어가기)으로 설계했으나, 실제 실행에서 같은 wave 안의 두 서브태스크가 동시에 `--resume`으로 같은 codex 스레드를 이어받으려다 한쪽이 "task busy"로 계속 실패해 빈 diff를 반환하고 그 서브태스크가 review/decision에서 통째로 누락되는 사고가 실측됨(아래 "검증 이력"). `--resume`은 순차 루프(cc-loop) 전제였고 wave-parallel에는 안 맞음 — 대신 서브태스크마다 독립 스레드(`--fresh`)로 시작하고, 필요한 맥락(합의 계획 + 선행 wave 실제 diff)은 항상 프롬프트 텍스트로 명시 전달한다.
 - Workflow 동시성 캡(세션당 최대 16개 병렬 `agent()`)을 넘는 대량 서브태스크는 자동으로 큐잉되므로 별도 처리 불필요.
+- **implement 결과 검증**: `diff`도 `filesChanged`도 비어있는 서브태스크는 "구현 안 됨"으로 명시 실패 처리한다(review 대상에서 조용히 빠지도록 두지 않는다) — 아래 종료 판정 참조.
 
 ### 종료 판정 (cc-loop과 동일한 기준, 대상만 서브태스크 단위로 좁아짐)
 
-- `pass` = 최종 validate가 baseline 대비 신규 회귀 0 **그리고** 모든 서브태스크에서 critical 0.
-- `iterate` = 그 외. 귀책이 명확하면 해당 서브태스크만, 통합 실패면 triage로 만든 새 서브태스크(들)까지 포함해 다음 라운드 `implement`에 재투입.
+- `pass` = 최종 validate가 baseline 대비 신규 회귀 0 **그리고** 모든 서브태스크에서 critical 0 **그리고** implement 결과가 빈 서브태스크(diff·filesChanged 둘 다 없음)가 0.
+- `iterate` = 그 외. 귀책이 명확한 critical finding은 해당 서브태스크만, implement가 아예 빈 결과를 낸 서브태스크는 (원인 조사 없이) 곧바로 재투입, 통합 실패면 triage로 만든 새 서브태스크(들)까지 포함해 다음 라운드 `implement`에 재투입.
 - `maxRounds`(기본 5, `args.maxRounds`로 override) 초과 시 중단, `report.md`에 최종 상태·잔여 이슈·baseline 대비 신규 회귀·산출물 경로 기록 후 사용자에게 보고.
+- **`report.md`는 서브에이전트가 쓰지 않는다**: 하네스가 report/summary 형태 파일 쓰기를 서브에이전트에게 차단하는 정책이 있음이 실측으로 확인됨 — `workflow.mjs`는 report 텍스트를 반환값으로만 돌려주고, `report.md` 파일 쓰기는 Workflow를 호출한 오케스트레이터(SKILL.md를 따르는 쪽, 즉 제한 없는 Write 권한을 가진 orchestrator)가 직접 한다.
 
 ## 데이터 흐름
 
@@ -165,10 +167,18 @@ preflight → plan → critique → consensus(+subtask 분할) → implement(wav
 9. **fan-out 폭주 방지**: `implement`/`review` 모두 그룹당 동시 실행 4개 상한 고정, 초과분은 Workflow 큐잉에 맡김. 서브에이전트 내부에서 추가 서브에이전트를 스폰하는 nested delegation은 금지(depth=1) — 프롬프트에 명시.
 10. **file ownership/contract 겹침 미검출 시 안전판**: `consensus`가 겹침을 놓쳐도 wave별 집계 validate가 통합 실패를 조기에 잡아내므로, ownership 검사는 최적화이지 유일한 안전장치가 아니다.
 11. **baseline 캡처 실패**: preflight의 기존 빌드/테스트 실행 자체가 실패(타임아웃 등)해도 스킬을 중단하지 않는다 — `baseline.md`에 "캡처 실패, 회귀 판정 시 전체 실패를 신규로 간주"라고 명시하고 계속 진행(더 보수적인 fallback).
+12. **`args`가 문자열로 도착할 수 있음**: 이 하네스에서 Workflow의 `args`가 문서 스펙(객체)과 다르게 JSON 문자열로 전달되는 경우가 실측됨(원인 불명, 플랫폼 쪽 동작) — `workflow.mjs` 최상단에서 `typeof args === 'string'`이면 `JSON.parse`로 방어적으로 풀어서 쓴다.
+13. **implement가 빈 결과를 낼 수 있음**: `--fresh`로 고쳤지만, 그와 무관하게 Codex 호출이 어떤 이유로든 `diff`/`filesChanged` 둘 다 빈 채로 끝나면 해당 서브태스크를 review 대상에서 조용히 빼지 않고 명시적으로 실패 처리해 다음 라운드에 재투입한다(위 종료 판정 참조) — 원인이 무엇이든(스레드 충돌, 타임아웃, 기타) 안전판 역할.
 
-## 리스크
+## 검증 이력
 
-- **미검증**: Workflow `agent()`의 `agentType: "codex:codex-rescue"`가 cc-loop이 요구하는 `CLAUDE_PLUGIN_ROOT` 환경을 정상 보장하는지 확인 안 됨. 구현 계획 첫 태스크로 **preflight 단독 스파이크**(ping 1회)를 두고, 실패하면 이 스킬 자체를 SKILL.md 절차서 방식(Agent tool 직접 병렬 호출, Workflow 미사용)으로 되돌린다. 이 폴백 결정 지점을 구현 계획에 명시.
+1차 end-to-end 실행(두 독립 유틸 스크립트 추가 태스크)에서 실제로 두 가지 문제를 발견하고 고쳤다:
+
+- **wave 내 `--resume` 충돌**: 같은 wave의 두 서브태스크가 동시에 `--resume`으로 같은 codex 스레드를 이어받으려다 하나가 계속 "task busy"를 받고 포기 → 빈 diff 반환 → 그 서브태스크가 review/decision에서 통째로 누락됐는데도 `pass`로 판정됨(다른 서브태스크만 보고 전체를 통과 처리). 원인은 `implement`가 cc-loop의 순차 루프 전제였던 `--resume`을 wave-parallel로 옮기면서 그대로 물려받은 것. `--fresh` + 에러 처리 12번(빈 결과 명시 실패 처리)으로 수정.
+- **`report.md` 하네스 정책 충돌**: 서브에이전트가 report/summary 형태 파일을 못 쓰게 막는 하네스 정책에 걸림(우연히 Bash heredoc 우회로 그 실행에서는 통과했지만 안정적인 경로가 아님) — `report.md` 쓰기를 서브에이전트에서 오케스트레이터로 옮겨 근본적으로 해결(위 종료 판정 참조).
+- 부수적으로, Workflow의 `args`가 이 하네스에서는 문자열로 도착하는 것도 이때 발견(에러 처리 12번).
+
+2차 실행(같은 태스크, 수정 후)으로 재검증 완료 — `pass`, round 3, 24 agent, 76만 토큰. 흥미로운 점: `--fresh`로 고친 뒤에도 round 1에서 `word-count-sh` implement가 한 번 더 빈 결과(`filesChanged: [], diff: ""`)를 냈다 — 즉 `--resume`이 원인의 전부가 아니라, 동시에 뜬 두 codex 호출이 `codex-companion` 런타임 레벨에서 여전히 경합할 수 있다. 하지만 이번엔 에러 처리 13번(빈 결과 명시 실패 처리)이 정확히 작동해 그 서브태스크만 재시도됐고, round 2에서 성공 → round 2 리뷰가 `slugify.sh`에서 critical(다중 줄 입력 시 `sed`가 pattern space 전체에 걸려 "출력 항상 한 줄" 계약 위반)을 잡아 해당 서브태스크만 재투입 → round 3에서 수정 후 pass. 즉 **"실패를 명시적으로 잡아 재시도"가 `--fresh` 자체보다 더 근본적인 안전장치였다** — `--fresh`는 충돌 빈도를 줄였을 뿐 완전히 없애지 못했지만, 안전판 덕에 결과는 여전히 올바름(대신 라운드 수가 늘어남). 두 유틸 스크립트 모두 최종 `--self-check` 오케스트레이터가 직접 실행해 통과 확인, `report.md`도 오케스트레이터가 직접 Write로 저장 확인.
 
 ## 테스트
 

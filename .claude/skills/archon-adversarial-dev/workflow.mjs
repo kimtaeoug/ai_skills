@@ -34,9 +34,7 @@
 export const meta = {
   name: 'archon-adversarial-dev',
   description:
-    'Claude+Codex adversarial dev loop: plan/critique/consensus (with subtask split) -> ' +
-    'wave-parallel Codex implement -> per-wave validate -> 3-lens parallel Claude review -> ' +
-    'iterate/triage -> report',
+    'Claude+Codex adversarial dev loop: plan/critique/consensus (with subtask split) -> wave-parallel Codex implement -> per-wave validate -> 3-lens parallel Claude review -> iterate/triage -> report',
   phases: [
     { title: 'Preflight' },
     { title: 'Plan' },
@@ -54,8 +52,12 @@ const MAX_CONCURRENCY = 4 // fan-out cap per wave (implement + review), hard lim
 const MAX_CRITIQUE_ROUNDS = 2 // plan<->critique ping-pong cap before AskUserQuestion
 const DEFAULT_MAX_ROUNDS = 5 // implement->review round cap
 
-const task = args && args.task
-const maxRounds = (args && args.maxRounds) || DEFAULT_MAX_ROUNDS
+// ponytail: defensive parse — this harness has been observed to deliver `args` as a
+// JSON-encoded string instead of the object the Workflow tool docs promise. Accept
+// either shape rather than trusting the docs blindly.
+const resolvedArgs = typeof args === 'string' ? JSON.parse(args) : args
+const task = resolvedArgs && resolvedArgs.task
+const maxRounds = (resolvedArgs && resolvedArgs.maxRounds) || DEFAULT_MAX_ROUNDS
 if (!task) throw new Error('archon-adversarial-dev: task description is required')
 
 const slug = slugify(task)
@@ -239,19 +241,28 @@ let round = 0
 while (round < maxRounds) {
   round++
   const waves = topoSortIntoWaves(pending, subtasks)
+  const failedImplementIds = new Set() // subtasks whose implement call produced no diff/files
 
   phase('Implement')
   for (let w = 0; w < waves.length; w++) {
     const wave = waves[w]
-    const results = []
     for (const chunk of chunkBy(wave, MAX_CONCURRENCY)) {
+      // Zip by index (not by result.id) so a hard agent() failure (parallel() resolves
+      // it to null) can still be attributed to the right subtask.
       const chunkResults = await parallel(
         chunk.map((st) => () => implementSubtask(st, diffsById, consensusPlan))
       )
-      results.push(...chunkResults)
-    }
-    for (const r of results) {
-      if (r && r.diff) diffsById[r.id] = r.diff // failed entries (null) are skipped
+      chunk.forEach((st, i) => {
+        const r = chunkResults[i]
+        // A subtask that produced neither a diff nor a changed-files list did NOT
+        // actually get implemented (e.g. a concurrent Codex thread collision) — this
+        // must surface as a failure, not silently drop the subtask from review/decision.
+        if (r && (r.diff || (r.filesChanged && r.filesChanged.length))) {
+          diffsById[st.id] = r.diff
+        } else {
+          failedImplementIds.add(st.id)
+        }
+      })
     }
 
     phase('Validate')
@@ -297,7 +308,7 @@ while (round < maxRounds) {
     r.findings.filter((f) => f.severity === 'critical').map((f) => ({ ...f, subtaskId: r.id }))
   )
 
-  if (!regressed && criticalFindings.length === 0) {
+  if (!regressed && criticalFindings.length === 0 && failedImplementIds.size === 0) {
     phase('Report')
     const report = renderFinalReport({
       status: 'pass',
@@ -307,14 +318,21 @@ while (round < maxRounds) {
       consensusPlan,
       subtasks,
     })
-    await persistFile(`${dir}/report.md`, report)
+    // Do NOT delegate this write to an agent(): subagents are blocked from writing
+    // report/summary-shaped files by harness policy. The orchestrator that invoked
+    // this Workflow (which has real, unrestricted Write access) persists report.md
+    // itself from this returned `report` string — see SKILL.md step 3.
     return { status: 'pass', round, dir, report }
   }
 
   // iterate: isolate to specific subtasks where possible; a whole-suite regression
   // that can't be pinned to one subtask's critical findings goes through triage
-  // instead of blindly re-running the original subtasks.
-  const isolatedIds = [...new Set(criticalFindings.map((f) => f.subtaskId))]
+  // instead of blindly re-running the original subtasks. A subtask whose implement
+  // call itself produced nothing (failedImplementIds) is always isolated and retried
+  // directly — no need to guess why via triage, it just needs to actually run.
+  const isolatedIds = [
+    ...new Set([...criticalFindings.map((f) => f.subtaskId), ...failedImplementIds]),
+  ]
   let triageSubtasks = []
   if (regressed && isolatedIds.length === 0) {
     const triaged = await agent(
@@ -356,7 +374,8 @@ const finalReport = renderFinalReport({
   consensusPlan,
   subtasks,
 })
-await persistFile(`${dir}/report.md`, finalReport)
+// See the pass-path comment above: report.md is written by the orchestrator from
+// this returned string, not by an agent() call.
 return { status: 'iterate-stopped', round, dir, report: finalReport }
 
 // ---------------------------------------------------------------------------
@@ -422,7 +441,13 @@ async function implementSubtask(subtask, diffsById, consensusPlan) {
     .join('\n\n')
   const result = await agent(
     [
-      '--resume',
+      // --fresh, not --resume: subtasks in the same wave run concurrently via
+      // parallel(), and --resume tries to continue the SAME last codex thread — two
+      // concurrent --resume calls collide (one gets "task still busy" and gives up
+      // with an empty diff, silently dropping that subtask). Each subtask gets its
+      // own independent thread instead; full context is always passed explicitly
+      // below, so there's nothing lost by not resuming a shared thread.
+      '--fresh',
       `Subtask ${subtask.id}: ${subtask.description}`,
       `Owns files: ${(subtask.ownsFiles || []).join(', ') || '(none declared)'}`,
       priorDiffs
