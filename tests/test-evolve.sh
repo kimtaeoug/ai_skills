@@ -15,6 +15,9 @@ cleanup() {
   rm -rf "$REPO_ROOT/evolution/.state/no-change-skill.snapshot"
   rm -f "$REPO_ROOT/evolution/.state/git-untracked-skill.txt"
   rm -f "$REPO_ROOT/evolution/.state/corrupt-skill.txt"
+  rm -rf "$REPO_ROOT/evolution/.state/corrupt-skill.snapshot"
+  rm -f "$REPO_ROOT/evolution/.state/track-skill.txt"
+  rm -rf "$REPO_ROOT/evolution/.state/track-skill.snapshot"
   rm -rf "$REPO_ROOT/evolution/.state/.sessions"
   rm -f "$HOME/.agents/skills/track-skill"
 }
