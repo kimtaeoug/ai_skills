@@ -5,9 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 EVOLUTION_DIR="$REPO_ROOT/evolution"
 STATE_DIR="$EVOLUTION_DIR/.state"
+SESSIONS_DIR="$STATE_DIR/.sessions"
 
 usage() {
-  echo "Usage: evolve snapshot <skill-dir> | evolve diff <skill-dir>" >&2
+  echo "Usage: evolve snapshot <skill-dir> | evolve diff <skill-dir> | evolve track <session-id> <skill-dir> | evolve pending <session-id> | evolve clear-session <session-id>" >&2
   exit 1
 }
 
@@ -88,8 +89,50 @@ cmd_diff() {
   fi
 }
 
+cmd_track() {
+  local session_id="$1" skill_dir skill_name touched_file state_file
+  skill_dir="$(resolve_dir "$2")"
+  skill_name="$(basename "$skill_dir")"
+  mkdir -p "$SESSIONS_DIR"
+  touched_file="$SESSIONS_DIR/${session_id}-touched.txt"
+  touch "$touched_file"
+
+  if ! grep -qxF "$skill_name" "$touched_file" 2>/dev/null; then
+    echo "$skill_name" >> "$touched_file"
+  fi
+
+  state_file="$STATE_DIR/${skill_name}.txt"
+  if [ ! -f "$state_file" ]; then
+    cmd_snapshot "$skill_dir" > /dev/null
+  fi
+}
+
+cmd_pending() {
+  local session_id="$1" touched_file
+  touched_file="$SESSIONS_DIR/${session_id}-touched.txt"
+  [ -f "$touched_file" ] || return 0
+
+  local skill_name dir out
+  while IFS= read -r skill_name; do
+    [ -n "$skill_name" ] || continue
+    dir="$HOME/.agents/skills/$skill_name"
+    [ -d "$dir" ] || continue
+    out="$(cmd_diff "$dir" 2>/dev/null)"
+    [ -n "$out" ] && echo "$skill_name"
+  done < "$touched_file"
+  return 0
+}
+
+cmd_clear_session() {
+  local session_id="$1"
+  rm -f "$SESSIONS_DIR/${session_id}-touched.txt"
+}
+
 case "${1:-}" in
   snapshot) shift; [ $# -eq 1 ] || usage; cmd_snapshot "$1" ;;
   diff) shift; [ $# -eq 1 ] || usage; cmd_diff "$1" ;;
+  track) shift; [ $# -eq 2 ] || usage; cmd_track "$1" "$2" ;;
+  pending) shift; [ $# -eq 1 ] || usage; cmd_pending "$1" ;;
+  clear-session) shift; [ $# -eq 1 ] || usage; cmd_clear_session "$1" ;;
   *) usage ;;
 esac
