@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+EVOLUTION_DIR="$REPO_ROOT/evolution"
+STATE_DIR="$EVOLUTION_DIR/.state"
+
+usage() {
+  echo "Usage: evolve snapshot <skill-dir> | evolve diff <skill-dir>" >&2
+  exit 1
+}
+
+resolve_dir() {
+  local d="$1"
+  [ -d "$d" ] || { echo "evolve: not a directory: $d" >&2; exit 1; }
+  (cd "$d" && pwd)
+}
+
+cmd_snapshot() {
+  local skill_dir skill_name state_file
+  skill_dir="$(resolve_dir "$1")"
+  skill_name="$(basename "$skill_dir")"
+  mkdir -p "$STATE_DIR"
+  state_file="$STATE_DIR/${skill_name}.txt"
+
+  if git -C "$skill_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    local sha
+    sha="$(git -C "$skill_dir" rev-parse HEAD)"
+    {
+      echo "mode=git"
+      echo "ref=$sha"
+      echo "skill_path=$skill_dir"
+    } > "$state_file"
+    echo "evolve: snapshot recorded (git HEAD $sha) for $skill_name"
+  else
+    local snapshot_dir="$STATE_DIR/${skill_name}.snapshot"
+    rm -rf "$snapshot_dir"
+    cp -r "$skill_dir" "$snapshot_dir"
+    {
+      echo "mode=copy"
+      echo "ref=$snapshot_dir"
+      echo "skill_path=$skill_dir"
+    } > "$state_file"
+    echo "evolve: snapshot recorded (file copy) for $skill_name"
+  fi
+}
+
+cmd_diff() {
+  local skill_dir skill_name state_file mode ref skill_path
+  skill_dir="$(resolve_dir "$1")"
+  skill_name="$(basename "$skill_dir")"
+  state_file="$STATE_DIR/${skill_name}.txt"
+
+  [ -f "$state_file" ] || {
+    echo "evolve: no baseline found for '$skill_name'. Run: evolve snapshot $skill_dir" >&2
+    exit 1
+  }
+
+  while IFS='=' read -r key value; do
+    case "$key" in
+      mode) mode="$value" ;;
+      ref) ref="$value" ;;
+      skill_path) skill_path="$value" ;;
+    esac
+  done < "$state_file"
+
+  if [ "$mode" = "git" ]; then
+    git -C "$skill_path" diff "$ref" -- .
+  else
+    diff -ru "$ref" "$skill_path"
+    local status=$?
+    if [ "$status" -ge 2 ]; then
+      echo "evolve: diff failed (exit $status)" >&2
+      exit "$status"
+    fi
+  fi
+}
+
+case "${1:-}" in
+  snapshot) shift; [ $# -eq 1 ] || usage; cmd_snapshot "$1" ;;
+  diff) shift; [ $# -eq 1 ] || usage; cmd_diff "$1" ;;
+  *) usage ;;
+esac
