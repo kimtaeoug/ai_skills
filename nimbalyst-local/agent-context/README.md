@@ -30,12 +30,24 @@ open questions: none' |
 # Rebuild the agent's current context: latest checkpoint body, then later events.
 "$CLI" resume codex --target "$REPO"
 
-# Debug the agent's first-parent history and inspect both persistent tips.
+# Debug the agent's first-parent history and inspect all persistent tips.
 "$CLI" log codex --target "$REPO"
 "$CLI" status --target "$REPO"
+
+# Record (or refresh) the shared domain summary. Body comes from stdin.
+printf '%s\n' '## Business domain
+...
+confidence: high
+
+## Technical stack
+...
+confidence: high' | "$CLI" domain-set --target "$REPO"
+
+# Read it back later, from any session.
+"$CLI" domain-show --target "$REPO"
 ```
 
-The only allowed agents are `claude` and `codex`; event types are `plan`, `decision`, `summary`, and `checkpoint`. Appends use an expected-old-value `git update-ref` compare-and-swap. On a race, the script rereads the tip and rebuilds the commit with that new parent before retrying, so the ref only advances fast-forward.
+The only allowed per-session agents are `claude` and `codex`; event types are `plan`, `decision`, `summary`, and `checkpoint`. `domain` is a third, shared, non-per-agent type recorded on its own persistent ref (`refs/heads/agent-context/domain`) via `domain-set`/`domain-show`; it is not exposed through the generic `append` command. Appends (including `domain-set`) use an expected-old-value `git update-ref` compare-and-swap. On a race, the script rereads the tip and rebuilds the commit with that new parent before retrying, so the ref only advances fast-forward.
 
 After 20 non-checkpoint events since the last checkpoint, `append` automatically creates a source-backed checkpoint and reports its OID on stderr. Use `checkpoint` whenever a human or agent can provide the preferred concise rollup. Cross-clone remote syncing is intentionally not implemented.
 
@@ -84,3 +96,12 @@ To run the end-to-end smoke test:
 bash /Users/deratio/skills/nimbalyst-local/agent-context/smoke-test.sh
 bash /Users/deratio/skills/nimbalyst-local/agent-context/onboarding-smoke-test.sh
 ```
+
+## Domain analysis
+
+`domain-set` and `domain-show` share one persistent ref (`refs/heads/agent-context/domain`), separate from the per-agent `claude`/`codex` refs. It is meant to answer "what does this repository do, and with what stack" once per repo, not per session.
+
+- `domain-set --target <repo>` rejects an empty or whitespace-only stdin body without creating a commit.
+- On success, it also writes `<repo-toplevel>/.agent-context/DOMAIN.md` as a plain-text mirror of the latest body — the Git commit is the source of truth, the file is a convenience cache. The write is atomic (temp file + `mv`) and replaces a pre-existing file or symlink at that path rather than writing through it.
+- `domain-show --target <repo>` prints `No domain analysis yet for this repo.` (exit 0) when the ref has no commits yet, instead of surfacing a raw Git error.
+- The `agent-context-setup` skill runs this automatically after installation, skipping it if a domain summary already exists. It is not injected into the `SessionStart` hook output — call `domain-show` explicitly when you need it.
