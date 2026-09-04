@@ -1,0 +1,22 @@
+{
+  "subtasks": [
+    {
+      "id": "slugify-sh",
+      "description": "Create nimbalyst-local/tools/slugify.sh: #!/usr/bin/env bash + set -euo pipefail + LC_ALL=C; die() helper matching agent-context.sh:8 style; usage/argument handling supporting `--` end-of-options marker and `--self-check` recognized only as sole argument; if non-flag argv present, join all argv words with single space and slugify that string (ignore stdin); else read and slugify stdin; slugify logic: lowercase, filter to [a-z0-9] with runs collapsed to single '-', trim leading/trailing '-', ASCII-only (tag non-ASCII-handling line with `# ponytail: ASCII-only slug folding, byte-drops non-Latin input; add real Unicode transliteration (e.g. iconv -t ascii//TRANSLIT) if non-Latin input becomes a requirement`); output exactly one line with trailing newline, empty input yields empty line and exit 0; inline --self-check using pass()/fail() printing PASS:/FAIL: mirroring tests/test-evolve.sh assert style, exit non-zero on first failure, covering: normal text, whitespace-only input, leading/trailing punctuation, consecutive punctuation, non-ASCII byte input (degraded-but-non-crashing), empty stdin, multi-arg join behavior, `--` literal-string handling (including literal string '--self-check' passed after --); chmod +x the file.",
+      "dependsOn": [],
+      "ownsFiles": [
+        "nimbalyst-local/tools/slugify.sh"
+      ],
+      "touchesContracts": []
+    },
+    {
+      "id": "word-count-sh",
+      "description": "Create nimbalyst-local/tools/word-count.sh: #!/usr/bin/env bash + set -euo pipefail + LC_ALL=C (documented as byte/ASCII-oriented counting, mirroring locale-sensitivity precedent in agent-context.sh:278); die() helper matching agent-context.sh:8 style; usage/argument handling supporting `--` end-of-options marker and `--self-check` recognized only as sole argument; accepts zero args (read stdin) or exactly one file argument (reject 2+ file args via die usage error); missing/unreadable file -> die \"cannot read file: <path>\", exit 1; wrap wc -w / wc -l, normalize raw wc output (strip leading whitespace padding and any filename column) into controlled printf records: 'words: N' then 'lines: N'; empty stdin/file -> 'words: 0' / 'lines: 0' exit 0; lines semantics = wc -l newline-count semantics (document in-script that a final line without trailing newline is not counted); inline --self-check using pass()/fail() printing PASS:/FAIL: mirroring tests/test-evolve.sh assert style, using mktemp + trap cleanup EXIT for file fixture (mirroring smoke-test.sh:6-12 / test-evolve.sh:6-27), guarding any pipeline whose failure is a valid test outcome with explicit `&& exit 1 || true`-style handling (mirroring smoke-test.sh:44); self-check covers: normal file, empty file, file without final trailing newline, missing file (confirms die/exit 1), stdin input, multi-file-argument rejection; chmod +x the file.",
+      "dependsOn": [],
+      "ownsFiles": [
+        "nimbalyst-local/tools/word-count.sh"
+      ],
+      "touchesContracts": []
+    }
+  ]
+}
