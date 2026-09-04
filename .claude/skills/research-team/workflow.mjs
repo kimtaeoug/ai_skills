@@ -31,8 +31,7 @@
 export const meta = {
   name: 'research-team',
   description:
-    'Cited, fact-checked research: parallel find (web/code) -> independent per-claim ' +
-    'verify -> evidence/reasoning/conclusion synthesis -> report',
+    'Cited, fact-checked research: parallel find (web/code) -> independent per-claim verify -> evidence/reasoning/conclusion synthesis -> report',
   phases: [
     { title: 'Plan' },
     { title: 'Find' },
@@ -44,9 +43,13 @@ export const meta = {
 
 const FIND_LANES = 3 // fixed lane count regardless of mode
 
-const question = args && args.question
-const mode = (args && args.mode) || 'both' // 'web' | 'code' | 'both'
-const repoPath = (args && args.repoPath) || '.'
+// Some Workflow tool callers deliver `args` as a JSON-encoded string instead of the
+// documented object (observed in practice) — parse defensively rather than trust the type.
+const parsedArgs = typeof args === 'string' ? JSON.parse(args) : args
+
+const question = parsedArgs && parsedArgs.question
+const mode = (parsedArgs && parsedArgs.mode) || 'both' // 'web' | 'code' | 'both'
+const repoPath = (parsedArgs && parsedArgs.repoPath) || '.'
 if (!question) throw new Error('research-team: question is required')
 if (!['web', 'code', 'both'].includes(mode)) {
   throw new Error(`research-team: mode must be web|code|both, got "${mode}"`)
@@ -144,10 +147,11 @@ const allClaims = findResults
 if (allClaims.length === 0) {
   phase('Report')
   const report = renderReport({ question, mode, claims: [], synthesis: null, dir })
-  await persistFile(`${dir}/report.md`, report)
+  const reportWritten = await persistFile(`${dir}/report.md`, report)
   return {
     status: 'no-claims-found',
     dir,
+    reportWritten,
     answer: 'No sourced claims could be found for this question.',
   }
 }
@@ -193,13 +197,17 @@ if (confirmed.length > 0) {
 // ---------------------------------------------------------------------------
 phase('Report')
 const report = renderReport({ question, mode, claims: verifiedClaims, synthesis, dir })
-await persistFile(`${dir}/report.md`, report)
+const reportWritten = await persistFile(`${dir}/report.md`, report)
 
+const synthesisAttempted = confirmed.length > 0
 return {
-  status: synthesis ? 'answered' : 'no-confirmed-claims',
+  status: synthesis ? 'answered' : synthesisAttempted ? 'synthesis-failed' : 'no-confirmed-claims',
   dir,
+  reportWritten,
   answer: synthesis
     ? renderAnswer(synthesis)
+    : synthesisAttempted
+    ? `${confirmed.length} claim(s) were confirmed, but the synthesis step itself failed (agent error, not a claims problem) — retry the question rather than treating this as "nothing found."`
     : 'No claim survived independent verification — nothing confirmed to answer from.',
   claimsSummary: {
     total: verifiedClaims.length,
@@ -309,7 +317,10 @@ async function verifyClaim(claim) {
 }
 
 async function persistFile(path, content) {
-  await agent(
+  // agent() returns null on terminal failure (e.g. rate-limited) instead of throwing,
+  // so a failed write is silent unless we return the outcome. The caller surfaces it as
+  // `reportWritten` so a stale report.md from a prior run isn't mistaken for this run's.
+  const result = await agent(
     [
       `Write the following exact content to "${path}" using Write`,
       '(create parent directories if needed, overwrite if the file exists; do not alter the content).',
@@ -319,6 +330,7 @@ async function persistFile(path, content) {
     ].join('\n'),
     { label: `persist:${path}` }
   )
+  return result != null
 }
 
 function renderAnswer(synthesis) {
@@ -360,6 +372,10 @@ function renderReport({ question, mode, claims, synthesis, dir }) {
     renderClaimsTable(claims),
     '',
     '## Final answer',
-    synthesis ? renderAnswer(synthesis) : '(no confirmed claims — no answer synthesized)',
+    synthesis
+      ? renderAnswer(synthesis)
+      : claims.some((c) => c.verdict === 'CONFIRMED')
+      ? '(confirmed claims existed, but the synthesis step failed — not a "no answer" case)'
+      : '(no confirmed claims — no answer synthesized)',
   ].join('\n')
 }

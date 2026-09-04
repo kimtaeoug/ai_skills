@@ -66,9 +66,13 @@ Workflow({
 - `answer` 필드를 채팅에 그대로 출력한다(근거/추론/결론/확인 안 됨 섹션 구조를 그대로
   유지 — 재구성하거나 요약하지 않는다).
 - `claimsSummary`(전체/확인/반박/미확인 건수)를 한 줄로 덧붙인다.
-- `dir` 경로(`nimbalyst-local/research/<slug>/report.md`)를 저장 위치로 언급한다.
-- `status`가 `no-claims-found`/`no-confirmed-claims`면 그 사실을 숨기지 않고 그대로
-  전달한다 — 억지로 답을 만들어내지 않는다.
+- `dir` 경로(`nimbalyst-local/research/<slug>/report.md`)를 저장 위치로 언급한다. 단
+  `reportWritten`이 `false`면(rate-limit 등으로 파일 쓰기 실패) 그 경로에 이번 결과가
+  저장되지 **않았다**고 명시한다 — 이전 실행이 남긴 stale한 report.md를 이번 결과로
+  오인하지 말 것.
+- `status`가 `no-claims-found`/`no-confirmed-claims`/`synthesis-failed`면 그 사실을 숨기지
+  않고 그대로 전달한다 — 억지로 답을 만들어내지 않는다. 특히 `synthesis-failed`는 "확인된
+  claim은 있었으나 종합 단계 자체가 실패(주로 rate-limit)"라는 뜻이므로 재시도를 권한다.
 - Verify 단계에서 원출처 재확인을 실제로 했다는 것(claim을 만든 에이전트가 자기 검증을 하지
   않는다는 것)을 사용자가 물으면 설명할 수 있어야 한다 — report.md의 Claims 표에 소스별
   판정(`CONFIRMED`/`REFUTED`/`UNVERIFIABLE`)과 접근 경로(`webfetch`/`chrome`/`blocked`/
