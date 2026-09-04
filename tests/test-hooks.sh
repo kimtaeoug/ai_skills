@@ -54,12 +54,17 @@ OUT="$(echo "{\"session_id\":\"$SESSION_ID\"}" | "$AUTORECORD_HOOK")"
 # --- evolve-autorecord.sh: pending change -> blocks with reason mentioning the skill ---
 "$EVOLVE" track "$SESSION_ID" "$HOOK_SKILL" >/dev/null
 echo "v2" >> "$HOOK_SKILL/SKILL.md"
-OUT="$(echo "{\"session_id\":\"$SESSION_ID\"}" | "$AUTORECORD_HOOK")"
-echo "$OUT" | jq -e '.hookSpecificOutput.hookEventName == "Stop"' >/dev/null \
-  && echo "$OUT" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null \
-  && echo "$OUT" | jq -r '.hookSpecificOutput.permissionDecisionReason' | grep -q "hook-skill" \
-  && pass "evolve-autorecord.sh blocks (permissionDecision=deny) and names the changed skill" \
-  || fail "expected a deny block mentioning hook-skill, got: $OUT"
+OUT="$(echo "{\"session_id\":\"$SESSION_ID\",\"stop_hook_active\":false}" | "$AUTORECORD_HOOK")"
+echo "$OUT" | jq -e '.decision == "block"' >/dev/null \
+  && echo "$OUT" | jq -r '.reason' | grep -q "hook-skill" \
+  && pass "evolve-autorecord.sh blocks (decision=block) and names the changed skill" \
+  || fail "expected a decision=block mentioning hook-skill, got: $OUT"
+
+# --- evolve-autorecord.sh: stop_hook_active=true does not block again ---
+OUT="$(echo "{\"session_id\":\"$SESSION_ID\",\"stop_hook_active\":true}" | "$AUTORECORD_HOOK")"
+echo "$OUT" | jq -e 'has("decision") | not' >/dev/null \
+  && pass "evolve-autorecord.sh stop_hook_active=true does not block again" \
+  || fail "expected no decision block when stop_hook_active=true, got: $OUT"
 
 # --- evolve-autorecord.sh: after snapshot, pending clears and it no longer blocks ---
 "$EVOLVE" snapshot "$HOOK_SKILL" >/dev/null

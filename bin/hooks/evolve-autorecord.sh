@@ -1,15 +1,26 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-# NOTE on schema: the brief assumed a Stop-block schema of
-#   {"hookSpecificOutput": {"hookEventName": "Stop", "decision": "block", "reason": "..."}}
-# WebFetch verification against https://code.claude.com/docs/en/hooks (2026-09-04) showed the
-# current schema uses "permissionDecision"/"permissionDecisionReason" instead of "decision"/"reason":
-#   {"hookSpecificOutput": {"hookEventName": "Stop", "permissionDecision": "deny", "permissionDecisionReason": "..."}}
-# It also showed the Stop input JSON has no "stop_hook_active" field (that's not part of the
-# current schema), so there is no signal to detect "this is a repeat call after a block". Instead
-# we rely on `evolve pending` going empty once the instructed `evolve snapshot` calls land — if
-# Claude doesn't snapshot, blocking again on the next Stop is correct (the delta is still pending).
+# NOTE on schema: an earlier pass here relied on a WebFetch summary and got this wrong. It claimed
+# the block schema was nested under hookSpecificOutput.permissionDecision/permissionDecisionReason
+# and that stop_hook_active didn't exist. Both claims were wrong -- that WebFetch summary had
+# conflated the PreToolUse "deny a tool call" example with the unrelated Stop section on the same
+# long docs page. Verified directly against the raw markdown via
+# `curl https://code.claude.com/docs/en/hooks.md`, reading the literal "### Stop" section:
+#
+#   #### Stop input
+#   In addition to the common input fields, Stop hooks receive `stop_hook_active`,
+#   `last_assistant_message`, `background_tasks`, and `session_crons`. The `stop_hook_active`
+#   field is `true` when Claude Code is already continuing as a result of a stop hook. Check this
+#   value or process the transcript to avoid blocking on a condition that will never resolve.
+#   Claude Code overrides the hook and ends the turn after 8 consecutive blocks.
+#
+#   #### Stop decision control
+#   | decision | "block" prevents Claude from stopping. Omit to allow Claude to stop |
+#   | reason   | Required when decision is "block". Tells Claude why it should continue |
+#
+# So the correct schema is top-level {"decision": "block", "reason": "..."}, and stop_hook_active
+# is real and used below to avoid re-blocking on the hook's own continuation turn.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EVOLVE="$SCRIPT_DIR/../evolve"
@@ -18,8 +29,18 @@ command -v jq >/dev/null 2>&1 || { echo '{}'; exit 0; }
 
 input="$(cat)"
 session_id="$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null)"
+stop_hook_active="$(printf '%s' "$input" | jq -r '.stop_hook_active // false' 2>/dev/null)"
 
 [ -n "$session_id" ] || { echo '{}'; exit 0; }
+
+if [ "$stop_hook_active" = "true" ]; then
+  pending="$("$EVOLVE" pending "$session_id" 2>/dev/null || true)"
+  if [ -z "$pending" ]; then
+    "$EVOLVE" clear-session "$session_id" 2>/dev/null || true
+  fi
+  echo '{}'
+  exit 0
+fi
 
 pending="$("$EVOLVE" pending "$session_id" 2>/dev/null || true)"
 [ -n "$pending" ] || { echo '{}'; exit 0; }
@@ -47,4 +68,4 @@ record 작성 후 각 스킬에 대해 반드시 실행: /Users/deratio/skills/b
 
 다 끝나면 정상적으로 응답을 마쳐라."
 
-jq -n --arg reason "$reason" '{"hookSpecificOutput": {"hookEventName": "Stop", "permissionDecision": "deny", "permissionDecisionReason": $reason}}'
+jq -n --arg reason "$reason" '{"decision": "block", "reason": $reason}'
