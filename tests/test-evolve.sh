@@ -15,6 +15,11 @@ cleanup() {
   rm -rf "$REPO_ROOT/evolution/.state/no-change-skill.snapshot"
   rm -f "$REPO_ROOT/evolution/.state/git-untracked-skill.txt"
   rm -f "$REPO_ROOT/evolution/.state/corrupt-skill.txt"
+  rm -rf "$REPO_ROOT/evolution/.state/corrupt-skill.snapshot"
+  rm -f "$REPO_ROOT/evolution/.state/track-skill.txt"
+  rm -rf "$REPO_ROOT/evolution/.state/track-skill.snapshot"
+  rm -rf "$REPO_ROOT/evolution/.state/.sessions"
+  rm -f "$HOME/.agents/skills/track-skill"
 }
 trap cleanup EXIT
 
@@ -88,5 +93,39 @@ if "$EVOLVE" diff "$CORRUPT_SKILL" 2>"$TMP/corrupt-err.log"; then
 else
   grep -q "corrupt state file" "$TMP/corrupt-err.log" && pass "diff with corrupt state file errors clearly" || fail "expected 'corrupt state file' message, got: $(cat "$TMP/corrupt-err.log")"
 fi
+
+# --- track: auto-snapshots when no baseline exists ---
+TRACK_SKILL="$TMP/track-skill"
+mkdir -p "$TRACK_SKILL"
+echo "v1" > "$TRACK_SKILL/SKILL.md"
+"$EVOLVE" track "test-session-1" "$TRACK_SKILL"
+if [ -f "$REPO_ROOT/evolution/.state/track-skill.txt" ]; then
+  pass "track auto-snapshots a skill with no baseline"
+else
+  fail "track should have created a baseline state file"
+fi
+
+# --- track: dedups repeated calls in the same session ---
+"$EVOLVE" track "test-session-1" "$TRACK_SKILL"
+"$EVOLVE" track "test-session-1" "$TRACK_SKILL"
+TOUCHED_COUNT="$(grep -c "^track-skill$" "$REPO_ROOT/evolution/.state/.sessions/test-session-1-touched.txt")"
+[ "$TOUCHED_COUNT" -eq 1 ] && pass "track dedups repeated calls" || fail "track should list track-skill exactly once, got $TOUCHED_COUNT"
+
+# --- pending: empty when no changes since track ---
+PENDING_OUT="$("$EVOLVE" pending "test-session-1")"
+[ -z "$PENDING_OUT" ] && pass "pending is empty with no changes" || fail "pending should be empty, got: $PENDING_OUT"
+
+# --- pending: reports skill after a real change ---
+echo "v2" >> "$TRACK_SKILL/SKILL.md"
+# pending resolves skill dirs via ~/.agents/skills/<name>, so symlink the temp dir there for this test
+mkdir -p "$HOME/.agents/skills"
+ln -sfn "$TRACK_SKILL" "$HOME/.agents/skills/track-skill"
+PENDING_OUT="$("$EVOLVE" pending "test-session-1")"
+echo "$PENDING_OUT" | grep -qx "track-skill" && pass "pending reports a changed tracked skill" || fail "pending should list track-skill, got: $PENDING_OUT"
+rm -f "$HOME/.agents/skills/track-skill"
+
+# --- clear-session: removes the touched-file ---
+"$EVOLVE" clear-session "test-session-1"
+[ ! -f "$REPO_ROOT/evolution/.state/.sessions/test-session-1-touched.txt" ] && pass "clear-session removes the touched file" || fail "clear-session should have removed the touched file"
 
 echo "all tests passed"
