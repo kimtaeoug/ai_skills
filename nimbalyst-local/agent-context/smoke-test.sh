@@ -50,4 +50,35 @@ echo "$RESUME_OUTPUT" | grep -F 'Smoke-test context is ready.' >/dev/null
 "$CLI" status --target "$TARGET" | grep -F "claude: $SUMMARY_OID" >/dev/null
 "$CLI" log claude --target "$TARGET" | grep -F "$SUMMARY_OID" >/dev/null
 
+DOMAIN_EMPTY_OUTPUT=$("$CLI" domain-show --target "$TARGET")
+[ "$DOMAIN_EMPTY_OUTPUT" = 'No domain analysis yet for this repo.' ]
+
+if printf '   \n\t\n' | "$CLI" domain-set --target "$TARGET" >/dev/null 2>&1; then
+  printf 'domain-set must reject an empty/whitespace body\n' >&2
+  exit 1
+fi
+if git --git-dir="$STORE" rev-parse --verify --quiet refs/heads/agent-context/domain >/dev/null; then
+  printf 'domain-set must not create a ref from an empty body\n' >&2
+  exit 1
+fi
+
+DOMAIN_BODY_1=$'## Business domain\nSmoke-test fixture repository.\nconfidence: high\n\n## Technical stack\nBash only.\nconfidence: high'
+DOMAIN_OID_1=$(printf '%s\n' "$DOMAIN_BODY_1" | "$CLI" domain-set --target "$TARGET")
+test "$(git --git-dir="$STORE" rev-parse refs/heads/agent-context/domain)" = "$DOMAIN_OID_1"
+"$CLI" domain-show --target "$TARGET" | grep -F 'Smoke-test fixture repository.' >/dev/null
+"$CLI" status --target "$TARGET" | grep -F "domain: $DOMAIN_OID_1" >/dev/null
+diff <(printf '%s\n' "$DOMAIN_BODY_1") "$TARGET/.agent-context/DOMAIN.md" >/dev/null
+
+SENTINEL="$SCRATCH/sentinel.txt"
+printf 'do not touch\n' > "$SENTINEL"
+rm -f "$TARGET/.agent-context/DOMAIN.md"
+ln -s "$SENTINEL" "$TARGET/.agent-context/DOMAIN.md"
+
+DOMAIN_BODY_2=$'## Business domain\nUpdated after re-analysis.\nconfidence: medium\n\n## Technical stack\nBash only.\nconfidence: high'
+DOMAIN_OID_2=$(printf '%s\n' "$DOMAIN_BODY_2" | "$CLI" domain-set --target "$TARGET")
+test "$(git --git-dir="$STORE" rev-parse "$DOMAIN_OID_2^")" = "$DOMAIN_OID_1"
+test "$(cat "$SENTINEL")" = 'do not touch'
+test ! -L "$TARGET/.agent-context/DOMAIN.md"
+diff <(printf '%s\n' "$DOMAIN_BODY_2") "$TARGET/.agent-context/DOMAIN.md" >/dev/null
+
 printf 'agent-context smoke test passed\n'

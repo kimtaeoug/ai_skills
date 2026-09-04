@@ -16,6 +16,8 @@ Usage:
   agent-context.sh resume AGENT [--target DEV_REPO]
   agent-context.sh log AGENT [--target DEV_REPO]
   agent-context.sh status [--target DEV_REPO]
+  agent-context.sh domain-set [--target DEV_REPO]   (body on stdin)
+  agent-context.sh domain-show [--target DEV_REPO]
 EOF
 }
 
@@ -42,6 +44,10 @@ resolve_store() {
   STORE="$common/agent-context.git"
 }
 
+git_toplevel() {
+  git -C "$TARGET" rev-parse --show-toplevel 2>/dev/null || die "cannot resolve working tree root for: $TARGET"
+}
+
 ensure_store() {
   resolve_store
   [ -e "$STORE" ] || git init --bare -q "$STORE"
@@ -54,7 +60,7 @@ validate_agent() {
 }
 
 validate_type() {
-  case "$1" in plan|decision|summary|checkpoint) ;; *) die "type must be plan, decision, summary, or checkpoint" ;; esac
+  case "$1" in plan|decision|summary|checkpoint|domain) ;; *) die "type must be plan, decision, summary, checkpoint, or domain" ;; esac
 }
 
 validate_single_line() {
@@ -257,10 +263,44 @@ command_status() {
   [ -d "$STORE" ] || die "context store does not exist: $STORE"
   [ "$(git --git-dir="$STORE" rev-parse --is-bare-repository 2>/dev/null)" = true ] || die "context store is not a bare Git repository: $STORE"
   printf 'store: %s\n' "$STORE"
-  for agent in claude codex; do
+  for agent in claude codex domain; do
     ref=$(ref_for "$agent"); tip=$(tip_for_ref "$ref")
     printf '%s: %s\n' "$agent" "${tip:-(unborn)}"
   done
+}
+
+command_domain_set() {
+  [ "$#" -eq 0 ] || die "domain-set accepts only --target"
+  ensure_store
+  local oid toplevel mirror temporary
+  BODY_FILE=$(mktemp "${TMPDIR:-/tmp}/agent-context-body.XXXXXX")
+  cat > "$BODY_FILE"
+  if [ -z "$(tr -d '[:space:]' < "$BODY_FILE")" ]; then
+    rm -f "$BODY_FILE"
+    die "domain-set requires a non-empty body on stdin"
+  fi
+  oid=$(append_event domain domain "domain-analysis-$$" "" "" "")
+  toplevel=$(git_toplevel)
+  mirror="$toplevel/.agent-context/DOMAIN.md"
+  mkdir -p "$(dirname "$mirror")"
+  temporary=$(mktemp "${TMPDIR:-/tmp}/agent-context-domain.XXXXXX")
+  cp "$BODY_FILE" "$temporary"
+  mv "$temporary" "$mirror"
+  rm -f "$BODY_FILE"
+  printf '%s\n' "$oid"
+}
+
+command_domain_show() {
+  [ "$#" -eq 0 ] || die "domain-show accepts only --target"
+  ensure_store
+  local ref tip
+  ref=$(ref_for domain)
+  tip=$(tip_for_ref "$ref")
+  if [ -z "$tip" ]; then
+    printf 'No domain analysis yet for this repo.\n'
+    return
+  fi
+  print_event_body "$tip"
 }
 
 main() {
@@ -276,6 +316,7 @@ main() {
   case "$command" in
     init) command_init "$@" ;; append) command_append "$@" ;; checkpoint) command_checkpoint "$@" ;;
     resume) command_resume "$@" ;; log) command_log "$@" ;; status) command_status "$@" ;;
+    domain-set) command_domain_set "$@" ;; domain-show) command_domain_show "$@" ;;
     -h|--help|help) usage ;; *) die "unknown command: $command" ;;
   esac
 }
