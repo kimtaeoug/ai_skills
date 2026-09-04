@@ -47,7 +47,7 @@ cmd_snapshot() {
 }
 
 cmd_diff() {
-  local skill_dir skill_name state_file mode ref skill_path
+  local skill_dir skill_name state_file mode="" ref="" skill_path=""
   skill_dir="$(resolve_dir "$1")"
   skill_name="$(basename "$skill_dir")"
   state_file="$STATE_DIR/${skill_name}.txt"
@@ -65,8 +65,19 @@ cmd_diff() {
     esac
   done < "$state_file"
 
+  [ -n "$mode" ] && [ -n "$skill_path" ] || {
+    echo "evolve: corrupt state file $state_file" >&2
+    exit 1
+  }
+
   if [ "$mode" = "git" ]; then
     git -C "$skill_path" diff "$ref" -- .
+    local untracked
+    untracked="$(git -C "$skill_path" ls-files --others --exclude-standard -- .)"
+    if [ -n "$untracked" ]; then
+      echo "--- untracked files (not in git diff, new since baseline) ---"
+      echo "$untracked"
+    fi
   else
     diff -ru "$ref" "$skill_path"
     local status=$?

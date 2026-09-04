@@ -13,6 +13,8 @@ cleanup() {
   rm -f "$REPO_ROOT/evolution/.state/no-baseline.txt"
   rm -f "$REPO_ROOT/evolution/.state/no-change-skill.txt"
   rm -rf "$REPO_ROOT/evolution/.state/no-change-skill.snapshot"
+  rm -f "$REPO_ROOT/evolution/.state/git-untracked-skill.txt"
+  rm -f "$REPO_ROOT/evolution/.state/corrupt-skill.txt"
 }
 trap cleanup EXIT
 
@@ -60,6 +62,31 @@ if "$EVOLVE" diff "$NO_BASELINE" 2>"$TMP/err.log"; then
   fail "diff without snapshot should exit nonzero"
 else
   grep -q "no baseline found" "$TMP/err.log" && pass "diff without snapshot errors clearly" || fail "error message missing expected text"
+fi
+
+# --- git-mode diff surfaces untracked (new) files ---
+GIT_UNTRACKED_SKILL="$TMP/git-untracked-skill"
+mkdir -p "$GIT_UNTRACKED_SKILL"
+git -C "$GIT_UNTRACKED_SKILL" init -q
+echo "line one" > "$GIT_UNTRACKED_SKILL/SKILL.md"
+git -C "$GIT_UNTRACKED_SKILL" add SKILL.md
+git -C "$GIT_UNTRACKED_SKILL" -c user.email=t@t.com -c user.name=t commit -q -m init
+
+"$EVOLVE" snapshot "$GIT_UNTRACKED_SKILL" > /dev/null
+echo "new reference doc" > "$GIT_UNTRACKED_SKILL/new-reference.md"
+DIFF_OUT="$("$EVOLVE" diff "$GIT_UNTRACKED_SKILL")"
+echo "$DIFF_OUT" | grep -q "new-reference.md" && pass "git-mode diff surfaces new untracked file" || fail "git-mode diff missing untracked file"
+
+# --- error case: corrupt state file ---
+CORRUPT_SKILL="$TMP/corrupt-skill"
+mkdir -p "$CORRUPT_SKILL"
+echo "content" > "$CORRUPT_SKILL/SKILL.md"
+"$EVOLVE" snapshot "$CORRUPT_SKILL" > /dev/null
+: > "$REPO_ROOT/evolution/.state/corrupt-skill.txt"
+if "$EVOLVE" diff "$CORRUPT_SKILL" 2>"$TMP/corrupt-err.log"; then
+  fail "diff with corrupt state file should exit nonzero"
+else
+  grep -q "corrupt state file" "$TMP/corrupt-err.log" && pass "diff with corrupt state file errors clearly" || fail "expected 'corrupt state file' message, got: $(cat "$TMP/corrupt-err.log")"
 fi
 
 echo "all tests passed"
