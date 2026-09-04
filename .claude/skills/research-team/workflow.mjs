@@ -24,7 +24,9 @@
 //   1. Uncertainty allowed   -> Synthesize marks gaps "unresolved", never guesses.
 //   2. Citation mandatory    -> Find's claim schema requires `source`; no source, no claim.
 //   3. Chain-of-thought      -> Synthesize output is evidence -> reasoning -> conclusion.
-//   4. Recency filter        -> claim schema requires `date`; Synthesize prefers latest.
+//   4. Recency filter        -> every claim carries a `date`; Synthesize is INSTRUCTED to
+//      prefer the latest on conflict (prompt-driven, no date comparator — dates may be
+//      commit hashes or "unknown").
 //   5. Fact-check subagent   -> Verify re-checks every claim from an independent agent
 //      call before Synthesize ever sees it.
 
@@ -261,8 +263,12 @@ async function runFinder(lane, question, repoPath) {
           `First gather local evidence from the repo at "${repoPath}" (Grep/Read/git log)`,
           'for how this is actually implemented. Then gather external evidence with',
           'WebSearch/WebFetch (fallback order below) for what the spec/best-practice says.',
-          'Produce claims that state whether the local implementation matches the',
-          'external source, citing both sides.',
+          'Do not combine local and external evidence into one claim with one source. For',
+          'each point, emit a separate code-side claim (citing path:line or commit) AND a',
+          'separate web-side claim (citing the URL), so each has exactly one verifiable',
+          'source. If you want to assert that the two agree or disagree, state that as its',
+          'own claim citing whichever single source most directly supports it, or emit it',
+          'as two claims (one per side).',
           SOURCE_FALLBACK,
         ].join('\n')
 

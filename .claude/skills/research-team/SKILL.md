@@ -65,7 +65,8 @@ Workflow({
 
 - `answer` 필드를 채팅에 그대로 출력한다(근거/추론/결론/확인 안 됨 섹션 구조를 그대로
   유지 — 재구성하거나 요약하지 않는다).
-- `claimsSummary`(전체/확인/반박/미확인 건수)를 한 줄로 덧붙인다.
+- `claimsSummary`가 있으면(전체/확인/반박/미확인 건수) 한 줄로 덧붙인다 — `no-claims-found`
+  경로에는 없다.
 - `dir` 경로(`nimbalyst-local/research/<slug>/report.md`)를 저장 위치로 언급한다. 단
   `reportWritten`이 `false`면(rate-limit 등으로 파일 쓰기 실패) 그 경로에 이번 결과가
   저장되지 **않았다**고 명시한다 — 이전 실행이 남긴 stale한 report.md를 이번 결과로
