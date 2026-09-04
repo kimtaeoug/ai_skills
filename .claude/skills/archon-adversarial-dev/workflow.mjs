@@ -7,477 +7,556 @@
 // Design doc (source of truth for behavior changes):
 //   docs/superpowers/specs/2026-09-04-archon-adversarial-dev-design.md
 //
-// This script targets the Workflow tool's documented orchestration primitives:
-//   agent(prompt, opts)      — spawn one subagent, opts.agentType selects the agent
-//   parallel(fns)            — run an array of thunks concurrently, results array
-//                               (failed entries resolve to null, per Workflow contract)
-//   pipeline(stages)         — run stages in sequence, each stage's output feeds the next
+// Contract this file actually targets (per the Workflow tool spec):
+//   - `export const meta = {...}` must be a pure literal, first thing in the file.
+//   - The script body runs directly (top-level await, top-level return) — agent()/
+//     parallel()/pipeline()/phase()/log()/args/budget are AMBIENT GLOBALS, not
+//     parameters. There is no exported run() function.
+//   - The script itself has NO filesystem or Bash access. Every file write and every
+//     Bash command runs INSIDE an agent() call (subagents have real Read/Write/Bash),
+//     never in this file's own JS. Persisting an artifact = asking an agent to write it.
+//   - Structured data (subtasks, findings, pass/fail) comes back via `schema` (forces
+//     a StructuredOutput tool call) instead of regex-parsing free text.
 //
-// FALLBACK: if `agent`/`parallel`/`pipeline` are not available as globals when this
-// script is invoked (Workflow tool absent, or agentType: "codex:codex-rescue" fails
-// to resolve CLAUDE_PLUGIN_ROOT), SKILL.md instructs the orchestrator to abandon
-// script execution and instead follow this file's phase structure by hand, replacing
-// agent()/parallel() calls with direct `Agent` tool calls (one message, multiple tool
-// uses, same fan-out cap and depth=1 rule). This spike/fallback decision must happen
-// before any Codex call — see PHASE 0.
+// FALLBACK: if the Workflow tool itself is unavailable, or agentType:
+// "codex:codex-rescue" fails to resolve CLAUDE_PLUGIN_ROOT, SKILL.md instructs the
+// orchestrator to abandon script execution and follow this file's phase structure by
+// hand instead, replacing agent()/parallel() with direct `Agent` tool calls (one
+// message, multiple tool uses, same fan-out cap and depth=1 rule). That decision must
+// happen before any Codex call — see PHASE 0 / preflight below.
 //
-// Roles are fixed: Codex only implements (codex:codex-rescue), Claude only reviews.
-// Codex critiques only during planning. No nested subagent delegation (depth=1).
+// Roles are fixed: Codex only implements (codex:codex-rescue), Claude only reviews
+// (default workflow agent). Codex critiques only during planning. No nested subagent
+// delegation (depth=1) — codex:codex-rescue shells out to the codex CLI, which has no
+// access to our Agent/Workflow tools, so this is naturally enforced.
 // Fan-out cap: max 4 concurrent per wave, for both implement and review.
 
-const CODEX_AGENT_TYPE = "codex:codex-rescue";
-const MAX_CONCURRENCY = 4; // fan-out cap per wave (implement + review), hard limit
-const MAX_CRITIQUE_ROUNDS = 2; // plan<->critique ping-pong cap before AskUserQuestion
-const DEFAULT_MAX_ROUNDS = 5; // implement->review round cap
+export const meta = {
+  name: 'archon-adversarial-dev',
+  description:
+    'Claude+Codex adversarial dev loop: plan/critique/consensus (with subtask split) -> ' +
+    'wave-parallel Codex implement -> per-wave validate -> 3-lens parallel Claude review -> ' +
+    'iterate/triage -> report',
+  phases: [
+    { title: 'Preflight' },
+    { title: 'Plan' },
+    { title: 'Critique' },
+    { title: 'Consensus' },
+    { title: 'Implement' },
+    { title: 'Validate' },
+    { title: 'Review' },
+    { title: 'Report' },
+  ],
+}
 
-export default async function run({ task, maxRounds }, { agent, parallel }) {
-  maxRounds = maxRounds || DEFAULT_MAX_ROUNDS;
-  if (!task) throw new Error("archon-adversarial-dev: task description is required");
+const CODEX_AGENT_TYPE = 'codex:codex-rescue'
+const MAX_CONCURRENCY = 4 // fan-out cap per wave (implement + review), hard limit
+const MAX_CRITIQUE_ROUNDS = 2 // plan<->critique ping-pong cap before AskUserQuestion
+const DEFAULT_MAX_ROUNDS = 5 // implement->review round cap
 
-  const slug = slugify(task);
-  const dir = `nimbalyst-local/plans/adversarial-dev/${slug}`;
-  // Directory is always cleared at start — no resume, no stale artifacts (spec: 범위 밖).
-  await bash(`rm -rf "${dir}" && mkdir -p "${dir}"`);
+const task = args && args.task
+const maxRounds = (args && args.maxRounds) || DEFAULT_MAX_ROUNDS
+if (!task) throw new Error('archon-adversarial-dev: task description is required')
 
-  // ---------------------------------------------------------------------
-  // PHASE 0: preflight — codex ping (spike) + baseline capture
-  // ---------------------------------------------------------------------
-  const pingResult = await agent(
-    [
-      "--fresh read-only, research/critique only, do not edit files.",
-      'Reply with exactly one line: "codex ready".',
-    ].join("\n"),
-    { agentType: CODEX_AGENT_TYPE }
-  );
-  if (!pingResult || !String(pingResult).toLowerCase().includes("codex ready")) {
-    return {
-      status: "aborted",
-      reason:
-        "preflight codex ping failed — Codex not reachable via codex:codex-rescue. " +
-        "Advise the user to run /codex:setup, then stop. Do not proceed to plan.",
-    };
-  }
+const slug = slugify(task)
+const dir = `nimbalyst-local/plans/adversarial-dev/${slug}`
 
-  // Baseline: existing build/test state, captured once, before anything else.
-  // Failure to capture does NOT abort the skill — conservative fallback: treat
-  // all validate failures as new regressions if baseline capture itself failed.
-  let baseline;
-  try {
-    baseline = await bash(detectAndRunValidateCommand(), { timeoutMs: 10 * 60 * 1000 });
-  } catch (e) {
-    baseline = { failed: true, error: String(e) };
-  }
-  await writeFile(
-    `${dir}/baseline.md`,
-    baseline.failed
-      ? `# Baseline\n\nCapture FAILED: ${baseline.error}\n\n` +
-        `Fallback: treat all subsequent validate failures as NEW regressions ` +
-        `(cannot distinguish from pre-existing failures).`
-      : `# Baseline\n\n\`\`\`\n${baseline.output}\n\`\`\`\n`
-  );
-
-  // ---------------------------------------------------------------------
-  // PHASE 1: plan (Claude) <-> critique (Codex, read-only) <-> consensus
-  // ---------------------------------------------------------------------
-  let plan = await agent(
-    `Draft a concise implementation plan for: ${task}\n` +
-      `Include: goal, key files/paths, design choices, risks. ` +
-      `Use Glob/Grep/Read to ground the draft in the actual repo.`,
-    { agentType: "claude" }
-  );
-
-  let critique;
-  for (let round = 1; round <= MAX_CRITIQUE_ROUNDS; round++) {
-    critique = await agent(
-      [
-        "--fresh read-only, research/critique only, do not edit files.",
-        `Here is a proposed implementation plan for: ${task}`,
-        plan,
-        "Critique it: gaps, better alternatives, missed risks, dissenting opinion.",
-      ].join("\n\n"),
-      { agentType: CODEX_AGENT_TYPE }
-    );
-    await writeFile(
-      `${dir}/${round === 1 ? "critique.md" : `critique-${round}.md`}`,
-      critique
-    );
-
-    if (round === MAX_CRITIQUE_ROUNDS || !hasBigDisagreement(plan, critique)) break;
-
-    // Revise the draft and re-critique (max 2 rounds total).
-    plan = await agent(
-      `Revise this plan given Codex's critique.\n\nOriginal plan:\n${plan}\n\n` +
-        `Critique:\n${critique}`,
-      { agentType: "claude" }
-    );
-  }
-  await writeFile(`${dir}/plan.md`, plan);
-
-  if (hasBigDisagreement(plan, critique)) {
-    return {
-      status: "needs-user-decision",
-      reason:
-        "Plan/critique disagreement persisted after 2 rounds. Orchestrator must call " +
-        "AskUserQuestion with the core disputed decision before proceeding to consensus.",
-      plan,
-      critique,
-    };
-  }
-
-  // consensus: merge into final plan + structured subtask list.
-  const consensusRaw = await agent(
-    "Merge the plan and critique into a final consensus plan, and split the work " +
-      "into subtasks as JSON. Schema:\n" +
-      `{"subtasks":[{"id":"t1","description":"...","dependsOn":[],` +
-      `"ownsFiles":["src/foo.ts"],"touchesContracts":[]}]}\n` +
-      "A single small task that doesn't need splitting is still a subtasks array " +
-      "of length 1 — do not special-case it.\n\n" +
-      `Plan:\n${plan}\n\nCritique:\n${critique}`,
-    { agentType: "claude" }
-  );
-  const { consensusPlan, subtasks: rawSubtasks } = parseConsensus(consensusRaw);
-  await writeFile(`${dir}/consensus-plan.md`, consensusPlan);
-
-  // Ownership/contract overlap check: merge overlapping subtasks into one
-  // (dependsOn alone can't catch shared-file/shared-contract coupling).
-  const subtasks = mergeOverlappingSubtasks(rawSubtasks);
-  await writeFile(`${dir}/subtasks.json`, JSON.stringify({ subtasks }, null, 2));
-
-  // ---------------------------------------------------------------------
-  // PHASE 2..N: implement (wave-parallel) -> validate -> review -> decision
-  // Loop until pass, or a triage/iterate round exhausts maxRounds.
-  // ---------------------------------------------------------------------
-  let pending = subtasks; // subtasks still needing (re-)implementation this round
-  let diffsById = {}; // subtaskId -> diff/changed-files text, latest known state
-  let round = 0;
-
-  while (round < maxRounds) {
-    round++;
-    const waves = topoSortIntoWaves(pending, subtasks);
-    const roundArtifacts = { waves: [] };
-
-    for (let w = 0; w < waves.length; w++) {
-      const wave = waves[w];
-      // Fan-out cap: parallel() itself should queue past MAX_CONCURRENCY, but we
-      // also chunk explicitly so a single wave() call never requests more than 4.
-      const results = [];
-      for (const chunk of chunkBy(wave, MAX_CONCURRENCY)) {
-        const chunkResults = await parallel(
-          chunk.map((st) => async () => {
-            const priorDiffs = (st.dependsOn || [])
-              .map((depId) => diffsById[depId])
-              .filter(Boolean)
-              .join("\n\n");
-            const out = await agent(
-              [
-                "--resume",
-                `Subtask ${st.id}: ${st.description}`,
-                `Owns files: ${(st.ownsFiles || []).join(", ") || "(none declared)"}`,
-                priorDiffs
-                  ? `Actual diff from subtasks this depends on (not the plan doc):\n${priorDiffs}`
-                  : "",
-                `Full consensus plan (context):\n${consensusPlan}`,
-                "Implement this subtask directly in the working tree. Report the " +
-                  "full list of changed/created file paths and the build/typecheck/" +
-                  "test commands to run for verification.",
-              ]
-                .filter(Boolean)
-                .join("\n\n"),
-              { agentType: CODEX_AGENT_TYPE }
-              // depth=1: do not let this agent spawn further subagents — enforced by
-              // instruction text above and by not exposing Agent/Workflow to it.
-            );
-            return { id: st.id, output: out };
-          })
-        );
-        results.push(...chunkResults);
-      }
-
-      for (const r of results) {
-        if (r && r.output) {
-          diffsById[r.id] = r.output; // null entries (failures) are left out of diffsById
-        }
-      }
-      roundArtifacts.waves.push({ wave: w + 1, results });
-
-      // validate after EVERY wave, not just at the end.
-      const waveValidation = await runValidateAgainstBaseline(baseline);
-      await writeFile(
-        `${dir}/validation-wave-${round}-${w + 1}.md`,
-        waveValidation.report
-      );
-    }
-
-    // Final validate for this round, compared against baseline (new regressions only).
-    const roundValidation = await runValidateAgainstBaseline(baseline);
-    await writeFile(`${dir}/validation-round-${round}.md`, roundValidation.report);
-
-    // ---------------------------------------------------------------------
-    // review: parallel, one reviewer per completed subtask, 3 fixed lenses,
-    // fixed finding schema.
-    // ---------------------------------------------------------------------
-    const reviewTargets = subtasks.filter((st) => diffsById[st.id]);
-    const reviewResults = [];
-    for (const chunk of chunkBy(reviewTargets, MAX_CONCURRENCY)) {
-      const chunkResults = await parallel(
-        chunk.map((st) => async () => {
-          const out = await agent(reviewPrompt(st, diffsById[st.id]), {
-            agentType: "claude",
-          });
-          return { id: st.id, findings: parseFindings(out) };
-        })
-      );
-      reviewResults.push(...chunkResults);
-    }
-    await writeFile(
-      `${dir}/review-round-${round}.md`,
-      renderReviewReport(reviewResults)
-    );
-
-    // ---------------------------------------------------------------------
-    // decision
-    // ---------------------------------------------------------------------
-    const newRegressions = roundValidation.newRegressions; // [] if none / baseline-failed-so-all-new
-    const criticalFindings = reviewResults.flatMap((r) =>
-      r.findings.filter((f) => f.severity === "critical")
-    );
-
-    if (newRegressions.length === 0 && criticalFindings.length === 0) {
-      const report = renderFinalReport({
-        status: "pass",
-        round,
-        dir,
-        baseline,
-        consensusPlan,
-        subtasks,
-      });
-      await writeFile(`${dir}/report.md`, report);
-      return { status: "pass", round, dir, report };
-    }
-
-    // iterate: isolate to specific subtasks where possible; unisolable
-    // wave-aggregate failures go through triage instead of blind re-run.
-    const { isolated, unisolable } = isolateFailures(
-      newRegressions,
-      criticalFindings,
-      subtasks
-    );
-
-    let triageSubtasks = [];
-    if (unisolable.length > 0) {
-      const triageRaw = await agent(
-        "The following validate/review failures could not be attributed to a single " +
-          "subtask (likely an integration mismatch between subtasks). Propose new " +
-          "subtask(s) (same JSON schema as before) to fix this — do not just ask to " +
-          "re-run the original subtasks blindly.\n\n" +
-          `Unisolable failures:\n${JSON.stringify(unisolable, null, 2)}\n\n` +
-          `Consensus plan:\n${consensusPlan}`,
-        { agentType: "claude" }
-      );
-      triageSubtasks = mergeOverlappingSubtasks(
-        parseConsensus(triageRaw).subtasks || []
-      );
-      subtasks.push(...triageSubtasks);
-    }
-
-    pending = [
-      ...subtasks.filter((st) => isolated.includes(st.id)),
-      ...triageSubtasks,
-    ];
-
-    if (pending.length === 0) {
-      // Shouldn't happen if newRegressions/criticalFindings is non-empty, but guard
-      // against an infinite loop with nothing to retry.
-      break;
-    }
-  }
-
-  // maxRounds exceeded (or nothing left to retry) — stop and report.
-  const report = renderFinalReport({
-    status: round >= maxRounds ? "maxRounds-exceeded" : "stalled",
-    round,
-    dir,
-    baseline,
-    consensusPlan,
-    subtasks,
-  });
-  await writeFile(`${dir}/report.md`, report);
-  return { status: "iterate-stopped", round, dir, report };
+const SUBTASK_SCHEMA = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    description: { type: 'string' },
+    dependsOn: { type: 'array', items: { type: 'string' } },
+    ownsFiles: { type: 'array', items: { type: 'string' } },
+    touchesContracts: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['id', 'description', 'dependsOn', 'ownsFiles', 'touchesContracts'],
 }
 
 // ---------------------------------------------------------------------------
-// Helpers. These are intentionally small — the orchestrating agent (Claude, in
-// either the Workflow-script path or the hand-run fallback path from SKILL.md)
-// is expected to perform the actual reasoning steps (plan drafting, disagreement
-// judgment, failure isolation) rather than this file encoding a full parser.
+// PHASE 0: preflight — codex ping (spike), then dir reset + baseline capture.
+// Ping first: fail fast and cheap before doing any real work.
 // ---------------------------------------------------------------------------
+phase('Preflight')
 
-function slugify(task) {
-  return String(task)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-}
-
-function detectAndRunValidateCommand() {
-  // Reuse whatever the repo's own build/test scripts are (package.json scripts,
-  // Makefile targets, etc.) — same "don't reinvent, detect the real command"
-  // policy as test-agent-team. The orchestrator fills this in per-repo at
-  // preflight time; this placeholder documents the contract.
-  return "true"; // orchestrator: replace with the detected real build/test command
-}
-
-async function runValidateAgainstBaseline(baseline) {
-  let result;
-  try {
-    result = await bash(detectAndRunValidateCommand(), { timeoutMs: 10 * 60 * 1000 });
-  } catch (e) {
-    result = { failed: true, error: String(e) };
-  }
-  const newRegressions = diffAgainstBaseline(baseline, result);
+const ping = await agent(
+  [
+    '--fresh read-only, research/critique only, do not edit files.',
+    'Reply with exactly one line: "codex ready".',
+  ].join('\n'),
+  { agentType: CODEX_AGENT_TYPE, label: 'preflight:codex-ping' }
+)
+if (!ping || !String(ping).toLowerCase().includes('codex ready')) {
   return {
-    report:
-      `# Validate\n\n\`\`\`\n${result.output || result.error}\n\`\`\`\n\n` +
-      `New regressions vs baseline: ${newRegressions.length}\n`,
-    newRegressions,
-  };
-}
-
-function diffAgainstBaseline(baseline, result) {
-  // If baseline capture itself failed, conservatively treat all current
-  // failures as new (spec error-handling rule 11).
-  if (baseline.failed) {
-    return result.failed ? [{ reason: "validate-failed", detail: result.error }] : [];
+    status: 'aborted',
+    reason:
+      'preflight codex ping failed — Codex not reachable via codex:codex-rescue. ' +
+      'Advise the user to run /codex:setup, then stop. Do not proceed to plan.',
   }
-  if (!result.failed) return [];
-  // Real implementation: structured diff of failing test/build targets between
-  // baseline.output and result.output. Left for the orchestrator to fill in
-  // against the repo's actual test runner output format.
-  return [{ reason: "validate-failed", detail: result.error || result.output }];
 }
 
-function hasBigDisagreement(plan, critique) {
-  // Orchestrator judgment call, not string matching — the agent reading this
-  // script performs this check itself when running the plan/critique loop.
-  return false;
-}
+// Baseline: reset the artifacts dir, detect the repo's real build/test command (same
+// "reuse what the repo already runs" policy as test-agent-team), run it once, and
+// write the result to disk. Failure to capture does NOT abort — conservative
+// fallback: treat all later validate failures as new regressions if this failed.
+const baseline = (await agent(
+  [
+    `1. Run Bash: rm -rf "${dir}" && mkdir -p "${dir}"`,
+    `2. Detect this repo's real build/lint/typecheck/test command(s) the same way the`,
+    `   test-agent-team skill does (package.json scripts, CI config, Makefile — reuse`,
+    `   what the repo actually runs; do not invent new tooling or install anything).`,
+    `3. Run the detected command(s) via Bash and capture the full output.`,
+    `4. Write a markdown report of the full output to "${dir}/baseline.md" using Write.`,
+  ].join('\n'),
+  {
+    label: 'preflight:baseline',
+    schema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string' },
+        passed: { type: 'boolean' },
+        output: { type: 'string' },
+        captureFailed: { type: 'boolean' },
+      },
+      required: ['command', 'passed', 'output', 'captureFailed'],
+    },
+  }
+)) || { command: '', passed: false, output: '(baseline agent produced no result)', captureFailed: true }
 
-function parseConsensus(raw) {
-  const match = String(raw).match(/\{[\s\S]*"subtasks"[\s\S]*\}/);
-  let subtasks = [];
-  if (match) {
-    try {
-      subtasks = JSON.parse(match[0]).subtasks || [];
-    } catch {
-      // Cycle/parse-failure guard (error-handling rule 7): degrade to a single
-      // sequential subtask rather than failing the whole run.
-      subtasks = [
-        {
-          id: "t1",
-          description: String(raw).slice(0, 2000),
-          dependsOn: [],
-          ownsFiles: [],
-          touchesContracts: [],
+// ---------------------------------------------------------------------------
+// PHASE 1: plan (Claude) <-> critique (Codex, read-only) <-> consensus
+// ---------------------------------------------------------------------------
+phase('Plan')
+let planText = await agent(
+  [
+    `Draft a concise implementation plan for: ${task}`,
+    'Include: goal, key files/paths, design choices, risks. Use Glob/Grep/Read to ground',
+    'the draft in the actual repo.',
+    `Then write the plan to "${dir}/plan.md" using Write. Return the plan text.`,
+  ].join('\n'),
+  { label: 'plan:draft' }
+)
+
+phase('Critique')
+let critique = ''
+let bigDisagreement = false
+for (let round = 1; round <= MAX_CRITIQUE_ROUNDS; round++) {
+  const critiquePath = round === 1 ? `${dir}/critique.md` : `${dir}/critique-${round}.md`
+  const critiqued = await agent(
+    [
+      '--fresh read-only, research/critique only, do not edit files.',
+      `Here is a proposed implementation plan for: ${task}`,
+      planText,
+      'Critique it: gaps, better alternatives, missed risks, dissenting opinion.',
+      'Judge whether there is a BIG disagreement (a core design decision genuinely in',
+      'dispute, not a minor nitpick).',
+      `Write your critique to "${critiquePath}" using Write.`,
+    ].join('\n\n'),
+    {
+      agentType: CODEX_AGENT_TYPE,
+      label: `critique:round-${round}`,
+      schema: {
+        type: 'object',
+        properties: {
+          critique: { type: 'string' },
+          bigDisagreement: { type: 'boolean' },
         },
-      ];
+        required: ['critique', 'bigDisagreement'],
+      },
     }
+  )
+  critique = (critiqued && critiqued.critique) || ''
+  bigDisagreement = Boolean(critiqued && critiqued.bigDisagreement)
+
+  if (round === MAX_CRITIQUE_ROUNDS || !bigDisagreement) break
+
+  planText = await agent(
+    [
+      "Revise this plan given Codex's critique.",
+      `Original plan:\n${planText}`,
+      `Critique:\n${critique}`,
+      `Then overwrite "${dir}/plan.md" with the revised plan using Write. Return the revised plan text.`,
+    ].join('\n\n'),
+    { label: `plan:revise-round-${round}` }
+  )
+}
+
+if (bigDisagreement) {
+  return {
+    status: 'needs-user-decision',
+    reason:
+      'Plan/critique disagreement persisted after 2 rounds. Orchestrator must call ' +
+      'AskUserQuestion with the core disputed decision before proceeding to consensus.',
+    plan: planText,
+    critique,
+    dir,
   }
-  return { consensusPlan: raw, subtasks };
+}
+
+// ---------------------------------------------------------------------------
+// consensus: merge into final plan + structured subtask list (schema-validated,
+// no regex parsing). A single small task that doesn't need splitting is still a
+// subtasks array of length 1 — the agent is told not to special-case it.
+// ---------------------------------------------------------------------------
+phase('Consensus')
+const consensus = await agent(
+  [
+    'Merge the plan and critique into a final consensus plan, and split the work into',
+    "subtasks. A single small task that doesn't need splitting is still a subtasks",
+    'array of length 1 — do not special-case it.',
+    `Plan:\n${planText}`,
+    `Critique:\n${critique}`,
+    `Write the consensus plan text (prose, not the JSON) to "${dir}/consensus-plan.md" using Write.`,
+  ].join('\n\n'),
+  {
+    label: 'consensus',
+    schema: {
+      type: 'object',
+      properties: {
+        consensusPlan: { type: 'string' },
+        subtasks: { type: 'array', items: SUBTASK_SCHEMA },
+      },
+      required: ['consensusPlan', 'subtasks'],
+    },
+  }
+)
+const consensusPlan = (consensus && consensus.consensusPlan) || ''
+// Ownership/contract overlap check: merge overlapping subtasks into one (dependsOn
+// alone can't catch shared-file/shared-contract coupling). Safety net: even if this
+// misses an overlap, per-wave validate catches it — this is an optimization, not the
+// sole guard.
+const subtasks = mergeOverlappingSubtasks((consensus && consensus.subtasks) || [])
+await persistFile(`${dir}/subtasks.json`, JSON.stringify({ subtasks }, null, 2))
+
+// ---------------------------------------------------------------------------
+// PHASE 2..N: implement (wave-parallel) -> validate -> review -> decision.
+// Loop until pass, or nothing left to retry, or maxRounds is exhausted.
+// ---------------------------------------------------------------------------
+let pending = subtasks // subtasks still needing (re-)implementation this round
+let diffsById = {} // subtaskId -> latest known diff text
+let round = 0
+
+while (round < maxRounds) {
+  round++
+  const waves = topoSortIntoWaves(pending, subtasks)
+
+  phase('Implement')
+  for (let w = 0; w < waves.length; w++) {
+    const wave = waves[w]
+    const results = []
+    for (const chunk of chunkBy(wave, MAX_CONCURRENCY)) {
+      const chunkResults = await parallel(
+        chunk.map((st) => () => implementSubtask(st, diffsById, consensusPlan))
+      )
+      results.push(...chunkResults)
+    }
+    for (const r of results) {
+      if (r && r.diff) diffsById[r.id] = r.diff // failed entries (null) are skipped
+    }
+
+    phase('Validate')
+    const waveValidation = await runValidate(
+      baseline.command,
+      `validate:wave-${round}-${w + 1}`,
+      `${dir}/validation-wave-${round}-${w + 1}.md`
+    )
+    log(
+      `round ${round} wave ${w + 1}/${waves.length}: ` +
+        `${waveValidation.passed ? 'validate OK' : 'validate FAILED'}`
+    )
+    phase('Implement')
+  }
+
+  phase('Validate')
+  const roundValidation = await runValidate(
+    baseline.command,
+    `validate:round-${round}`,
+    `${dir}/validation-round-${round}.md`
+  )
+
+  // ---------------------------------------------------------------------
+  // review: parallel, one reviewer per subtask with a known diff this round,
+  // 3 fixed lenses, fixed finding schema.
+  // ---------------------------------------------------------------------
+  phase('Review')
+  const reviewTargets = subtasks.filter((st) => diffsById[st.id])
+  const reviewResults = []
+  for (const chunk of chunkBy(reviewTargets, MAX_CONCURRENCY)) {
+    const chunkResults = await parallel(
+      chunk.map((st) => () => reviewSubtask(st, diffsById[st.id]))
+    )
+    reviewResults.push(...chunkResults)
+  }
+  await persistFile(`${dir}/review-round-${round}.md`, renderReviewReport(reviewResults))
+
+  // ---------------------------------------------------------------------
+  // decision
+  // ---------------------------------------------------------------------
+  const regressed = isNewRegression(baseline, roundValidation)
+  const criticalFindings = reviewResults.flatMap((r) =>
+    r.findings.filter((f) => f.severity === 'critical').map((f) => ({ ...f, subtaskId: r.id }))
+  )
+
+  if (!regressed && criticalFindings.length === 0) {
+    phase('Report')
+    const report = renderFinalReport({
+      status: 'pass',
+      round,
+      dir,
+      baseline,
+      consensusPlan,
+      subtasks,
+    })
+    await persistFile(`${dir}/report.md`, report)
+    return { status: 'pass', round, dir, report }
+  }
+
+  // iterate: isolate to specific subtasks where possible; a whole-suite regression
+  // that can't be pinned to one subtask's critical findings goes through triage
+  // instead of blindly re-running the original subtasks.
+  const isolatedIds = [...new Set(criticalFindings.map((f) => f.subtaskId))]
+  let triageSubtasks = []
+  if (regressed && isolatedIds.length === 0) {
+    const triaged = await agent(
+      [
+        'A validate run regressed (new failure vs baseline) but no single subtask was',
+        'flagged critical by review — likely an integration mismatch between',
+        'subtasks. Propose new subtask(s) to fix this. Do not just ask to re-run the',
+        'original subtasks blindly.',
+        `Validate output:\n${roundValidation.output}`,
+        `Consensus plan:\n${consensusPlan}`,
+      ].join('\n\n'),
+      {
+        label: `triage:round-${round}`,
+        schema: {
+          type: 'object',
+          properties: { subtasks: { type: 'array', items: SUBTASK_SCHEMA } },
+          required: ['subtasks'],
+        },
+      }
+    )
+    triageSubtasks = mergeOverlappingSubtasks((triaged && triaged.subtasks) || [])
+    subtasks.push(...triageSubtasks)
+  }
+
+  pending = [...subtasks.filter((st) => isolatedIds.includes(st.id)), ...triageSubtasks]
+
+  if (pending.length === 0) {
+    // Regression/critical findings exist but nothing to retry — avoid an infinite loop.
+    break
+  }
+}
+
+phase('Report')
+const finalReport = renderFinalReport({
+  status: round >= maxRounds ? 'maxRounds-exceeded' : 'stalled',
+  round,
+  dir,
+  baseline,
+  consensusPlan,
+  subtasks,
+})
+await persistFile(`${dir}/report.md`, finalReport)
+return { status: 'iterate-stopped', round, dir, report: finalReport }
+
+// ---------------------------------------------------------------------------
+// Helpers below. Pure JS ones (no agent()) do plain data-shaping only. Every helper
+// that touches the filesystem or runs a command does so via an agent() call — this
+// script has no FS/Bash access of its own.
+// ---------------------------------------------------------------------------
+
+function slugify(text) {
+  return String(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60)
+}
+
+async function persistFile(path, content) {
+  await agent(
+    [
+      `Write the following exact content to "${path}" using Write`,
+      '(create parent directories if needed, overwrite if the file exists; do not alter the content).',
+      '---BEGIN CONTENT---',
+      content,
+      '---END CONTENT---',
+    ].join('\n'),
+    { label: `persist:${path}` }
+  )
+}
+
+async function runValidate(knownCommand, label, reportPath) {
+  const result = await agent(
+    [
+      knownCommand
+        ? `Run this exact command via Bash: ${knownCommand}`
+        : "Detect and run this repo's real build/lint/typecheck/test command(s), the " +
+          'same way test-agent-team does (reuse what the repo actually runs).',
+      `Write a markdown report of the full output to "${reportPath}" using Write.`,
+    ].join('\n'),
+    {
+      label,
+      schema: {
+        type: 'object',
+        properties: { passed: { type: 'boolean' }, output: { type: 'string' } },
+        required: ['passed', 'output'],
+      },
+    }
+  )
+  return result || { passed: false, output: '(validate agent produced no result)' }
+}
+
+function isNewRegression(baseline, current) {
+  // ponytail: boolean pass/fail comparison only, not per-test-target diffing — this
+  // can't tell "different tests failing now" from "same failure as baseline". Upgrade
+  // to structured test-target diffing if this repo's runner emits parseable output.
+  if (baseline.captureFailed) return !current.passed
+  return baseline.passed && !current.passed
+}
+
+async function implementSubtask(subtask, diffsById, consensusPlan) {
+  const priorDiffs = (subtask.dependsOn || [])
+    .map((depId) => diffsById[depId])
+    .filter(Boolean)
+    .join('\n\n')
+  const result = await agent(
+    [
+      '--resume',
+      `Subtask ${subtask.id}: ${subtask.description}`,
+      `Owns files: ${(subtask.ownsFiles || []).join(', ') || '(none declared)'}`,
+      priorDiffs
+        ? `Actual diff from subtasks this depends on (not the plan doc):\n${priorDiffs}`
+        : '',
+      `Full consensus plan (context):\n${consensusPlan}`,
+      'Implement this subtask directly in the working tree.',
+      'After implementing, run `git diff -- <owned files>` via Bash to capture the actual diff.',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    {
+      agentType: CODEX_AGENT_TYPE,
+      label: `implement:${subtask.id}`,
+      schema: {
+        type: 'object',
+        properties: {
+          filesChanged: { type: 'array', items: { type: 'string' } },
+          diff: { type: 'string' },
+        },
+        required: ['filesChanged', 'diff'],
+      },
+    }
+  )
+  return { id: subtask.id, filesChanged: (result && result.filesChanged) || [], diff: (result && result.diff) || '' }
+}
+
+async function reviewSubtask(subtask, diff) {
+  const result = await agent(
+    [
+      '--fresh read-only, research/critique only, do not edit files.',
+      `Review subtask ${subtask.id}: ${subtask.description}`,
+      `Diff:\n${diff}`,
+      'Use exactly these 3 fixed lenses, independently (this guards against parallel',
+      'reviewers sharing the same blind spot from the earlier plan/consensus reasoning):',
+      '1. Requirements/test-gap — does the diff satisfy the subtask description? What tests are missing?',
+      '2. Integration/regression — does this break callers, shared contracts, or other subtasks?',
+      '3. Security/concurrency — injection, auth, race conditions, unsafe concurrency.',
+      'For EVERY finding, report exactly: location, failure path or repro steps, severity, needed tests.',
+    ].join('\n\n'),
+    {
+      label: `review:${subtask.id}`,
+      schema: {
+        type: 'object',
+        properties: {
+          findings: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                location: { type: 'string' },
+                failurePathOrRepro: { type: 'string' },
+                severity: { type: 'string', enum: ['critical', 'major', 'minor'] },
+                neededTests: { type: 'string' },
+              },
+              required: ['location', 'failurePathOrRepro', 'severity', 'neededTests'],
+            },
+          },
+        },
+        required: ['findings'],
+      },
+    }
+  )
+  return { id: subtask.id, findings: (result && result.findings) || [] }
 }
 
 function mergeOverlappingSubtasks(subtasks) {
-  // ownsFiles or touchesContracts overlap => merge into one sequential subtask.
-  // Safety net: even if this misses an overlap, per-wave validate catches it
-  // (error-handling rule 10) — this is an optimization, not the sole guard.
-  const merged = [];
-  const used = new Set();
+  const merged = []
+  const used = new Set()
   for (let i = 0; i < subtasks.length; i++) {
-    if (used.has(i)) continue;
-    let group = [subtasks[i]];
+    if (used.has(i)) continue
+    const group = [subtasks[i]]
     for (let j = i + 1; j < subtasks.length; j++) {
-      if (used.has(j)) continue;
+      if (used.has(j)) continue
       if (overlaps(subtasks[i], subtasks[j])) {
-        group.push(subtasks[j]);
-        used.add(j);
+        group.push(subtasks[j])
+        used.add(j)
       }
     }
     if (group.length === 1) {
-      merged.push(group[0]);
+      merged.push(group[0])
     } else {
       merged.push({
-        id: group.map((t) => t.id).join("+"),
-        description: group.map((t) => `[${t.id}] ${t.description}`).join(" THEN "),
+        id: group.map((t) => t.id).join('+'),
+        description: group.map((t) => `[${t.id}] ${t.description}`).join(' THEN '),
         dependsOn: [...new Set(group.flatMap((t) => t.dependsOn || []))].filter(
           (d) => !group.some((t) => t.id === d)
         ),
         ownsFiles: [...new Set(group.flatMap((t) => t.ownsFiles || []))],
         touchesContracts: [...new Set(group.flatMap((t) => t.touchesContracts || []))],
-      });
+      })
     }
   }
-  return merged;
+  return merged
 }
 
 function overlaps(a, b) {
-  const filesOverlap = (a.ownsFiles || []).some((f) => (b.ownsFiles || []).includes(f));
+  const filesOverlap = (a.ownsFiles || []).some((f) => (b.ownsFiles || []).includes(f))
   const contractsOverlap = (a.touchesContracts || []).some((c) =>
     (b.touchesContracts || []).includes(c)
-  );
-  return filesOverlap || contractsOverlap;
+  )
+  return filesOverlap || contractsOverlap
 }
 
 function topoSortIntoWaves(pending, allSubtasks) {
-  const byId = Object.fromEntries(allSubtasks.map((t) => [t.id, t]));
-  const remaining = new Set(pending.map((t) => t.id));
-  const waves = [];
-  const done = new Set(allSubtasks.map((t) => t.id).filter((id) => !remaining.has(id)));
+  const byId = Object.fromEntries(allSubtasks.map((t) => [t.id, t]))
+  const remaining = new Set(pending.map((t) => t.id))
+  const done = new Set(allSubtasks.map((t) => t.id).filter((id) => !remaining.has(id)))
+  const waves = []
 
-  let guard = 0;
+  let guard = 0
   while (remaining.size > 0 && guard++ < 100) {
     const ready = [...remaining].filter((id) =>
       (byId[id].dependsOn || []).every((d) => done.has(d) || !remaining.has(d))
-    );
+    )
     if (ready.length === 0) {
-      // Dependency cycle (error-handling rule 7): demote all remaining to a
-      // single sequential wave rather than failing the run.
-      waves.push([...remaining].map((id) => byId[id]));
-      break;
+      // Dependency cycle: demote all remaining to a single sequential wave rather
+      // than failing the run.
+      waves.push([...remaining].map((id) => byId[id]))
+      break
     }
-    waves.push(ready.map((id) => byId[id]));
+    waves.push(ready.map((id) => byId[id]))
     ready.forEach((id) => {
-      remaining.delete(id);
-      done.add(id);
-    });
+      remaining.delete(id)
+      done.add(id)
+    })
   }
-  return waves;
+  return waves
 }
 
 function chunkBy(arr, size) {
-  const out = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
-
-function reviewPrompt(subtask, diff) {
-  return [
-    "--fresh read-only, research/critique only, do not edit files.",
-    `Review subtask ${subtask.id}: ${subtask.description}`,
-    `Diff:\n${diff}`,
-    "Use exactly these 3 fixed lenses, independently:",
-    "1. Requirements/test-gap — does the diff satisfy the subtask description? What tests are missing?",
-    "2. Integration/regression — does this break callers, shared contracts, or other subtasks?",
-    "3. Security/concurrency — injection, auth, race conditions, unsafe concurrency.",
-    "For EVERY finding, report exactly these fields: location (file:line), " +
-      "failure path or repro steps, severity (critical/major/minor), needed tests.",
-  ].join("\n\n");
-}
-
-function parseFindings(raw) {
-  // Orchestrator-side structured extraction from the review agent's prose/JSON
-  // output into { location, repro, severity, neededTests } objects. Left to the
-  // agent executing this step to parse against the fixed schema demanded above.
-  return [];
+  const out = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
 }
 
 function renderReviewReport(reviewResults) {
@@ -489,43 +568,29 @@ function renderReviewReport(reviewResults) {
           ? r.findings
               .map(
                 (f) =>
-                  `- **${f.severity}** ${f.location}: ${f.failurePath || f.repro}\n  needed tests: ${f.neededTests}`
+                  `- **${f.severity}** ${f.location}: ${f.failurePathOrRepro}\n  needed tests: ${f.neededTests}`
               )
-              .join("\n")
-          : "(no findings)")
+              .join('\n')
+          : '(no findings)')
     )
-    .join("\n\n");
-}
-
-function isolateFailures(newRegressions, criticalFindings, subtasks) {
-  // criticalFindings already carry a subtask attribution from the review loop.
-  // newRegressions from wave-aggregate validate often can't be attributed to one
-  // subtask — those are unisolable and go to triage (spec: decision routing).
-  const isolated = [...new Set(criticalFindings.map((f) => f.subtaskId).filter(Boolean))];
-  const unisolable = [
-    ...newRegressions,
-    ...criticalFindings.filter((f) => !f.subtaskId),
-  ];
-  return { isolated, unisolable };
+    .join('\n\n')
 }
 
 function renderFinalReport({ status, round, dir, baseline, consensusPlan, subtasks }) {
   return [
-    `# archon-adversarial-dev report`,
-    ``,
+    '# archon-adversarial-dev report',
+    '',
     `Status: ${status}`,
     `Rounds run: ${round}`,
     `Artifacts: ${dir}/`,
-    baseline.failed ? `Baseline capture: FAILED (${baseline.error})` : `Baseline: captured`,
-    ``,
-    `## Consensus plan`,
+    baseline.captureFailed
+      ? 'Baseline capture: FAILED (all validate failures treated as new regressions)'
+      : `Baseline: captured (${baseline.passed ? 'passed' : 'failed'})`,
+    '',
+    '## Consensus plan',
     consensusPlan,
-    ``,
-    `## Subtasks`,
+    '',
+    '## Subtasks',
     JSON.stringify(subtasks, null, 2),
-  ].join("\n");
+  ].join('\n')
 }
-
-// bash()/writeFile() are provided by the Workflow tool's script execution
-// environment (fs + shell access scoped to the run). If the Workflow tool is
-// not present, this whole file is not executed — see SKILL.md's fallback path.
