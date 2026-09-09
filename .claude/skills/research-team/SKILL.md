@@ -20,6 +20,23 @@ description: >
 설계 근거: `docs/superpowers/specs/2026-09-04-research-team-design.md`. 동작을 바꾸려면
 스킬 파일이 아니라 그 설계 문서부터 갱신할 것.
 
+## Managed mode (`task-orchestrator`)
+
+`task-orchestrator`가 이 스킬을 호출할 때는 독립 워크플로를 끝까지 소유하지 않는다.
+오케스트레이터가 task root, local task id, criteria version, research id/attempt, artifact dir,
+question, mode를 제공하면 이 스킬은 조사 절차만 수행하고 결과를 해당 artifact dir에 남긴다.
+이 managed branch가 적용되면 결과를 반환하고 아래 standalone 실행 섹션으로 계속 진행하지 않는다.
+
+- completion/criteria 승인 여부는 판단하지 않는다.
+- task id를 새로 만들거나 기존 task state를 직접 완료 처리하지 않는다.
+- 원출처, 날짜, confidence, `CONFIRMED`/`REFUTED`/`UNVERIFIABLE` 판정은 평소와 같이 남긴다.
+- Workflow 툴이 있어도 `workflow.mjs`를 실행하지 않는다. 필요하면 절차서로 읽어 동등한 조사 단계를
+  수행한다.
+- claim finder와 source verifier는 가능한 한 독립 에이전트/역할로 나누며, finder가 자기 claim을
+  self-check한 것을 독립 검증으로 취급하지 않는다.
+- child role은 리더가 직접 dispatch한다. managed mode child는 자기 하위 team/subagent를 다시
+  만들지 않는다.
+
 ## 1. 인자 파싱
 
 - 사용자 요청에서 **조사 질문**(`question`)을 추출한다. 비어 있으면 무엇을 조사할지 한 줄로

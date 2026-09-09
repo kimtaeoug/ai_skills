@@ -1,0 +1,17 @@
+test_empty (__main__.AverageChecks.test_empty) ... ERROR
+test_negative (__main__.AverageChecks.test_negative) ... ok
+test_positive (__main__.AverageChecks.test_positive) ... ok
+test_single (__main__.AverageChecks.test_single) ... ok
+
+======================================================================
+ERROR: test_empty (__main__.AverageChecks.test_empty)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<stdin>", line 9, in test_empty
+  File "<stdin>", line 2, in average
+ZeroDivisionError: division by zero
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.000s
+
+FAILED (errors=1)

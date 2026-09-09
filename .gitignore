@@ -1,2 +1,4 @@
 .worktrees/
 evolution/.state/
+__pycache__/
+*.pyc

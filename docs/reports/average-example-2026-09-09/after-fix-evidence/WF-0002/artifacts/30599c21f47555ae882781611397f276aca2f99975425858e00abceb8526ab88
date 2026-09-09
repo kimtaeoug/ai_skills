@@ -1,0 +1,121 @@
+# WF-0002: SIMULATION: average([]) returns None; no UI/research/model
+
+Status: completed (revision 9)
+
+Reason: receipt_committed
+Policy version: 2
+Execution seconds: 0.25431203842163086
+Usage: {"cost_microusd": 0, "tokens": 0}
+Unsettled reservations: 0
+
+## Receipts
+
+- [6793f3d8fda26b454b1bbfb4609b847f1d9926def25f1bafa6c0e4a85c4f7357](artifacts/6793f3d8fda26b454b1bbfb4609b847f1d9926def25f1bafa6c0e4a85c4f7357)
+- [53eb6034c499be7dbc3b25c6086665fa3e6a6c0dff15ff3b0c17408551427369](artifacts/53eb6034c499be7dbc3b25c6086665fa3e6a6c0dff15ff3b0c17408551427369)
+- [5e06fadee878d1869c039b1349c65e0d68d7008f913ee4c2f9287574c397566d](artifacts/5e06fadee878d1869c039b1349c65e0d68d7008f913ee4c2f9287574c397566d)
+
+## Attempts
+
+- DEV-01/attempt-1: done; route develop; reason verified
+- TEST-01/attempt-1: done; route code_test; reason verified
+- REPORT-01/attempt-1: done; route report; reason verified
+
+## Policy changes
+
+[
+  {
+    "after": {
+      "approval_default": "deny",
+      "approval_timeout_s": 600,
+      "breaker": {
+        "cooldown_s": 60,
+        "failure_threshold": 3
+      },
+      "max_cost_microusd": 5000000,
+      "max_loop_iterations": 3,
+      "max_tokens": 100000,
+      "max_tool_retries": 20,
+      "retry": {
+        "base_delay_s": 1,
+        "cap_delay_s": 30,
+        "max_attempts": 3,
+        "max_elapsed_s": 180
+      },
+      "stage_timeout_s": 900,
+      "tool_timeout_s": 120,
+      "unknown_usage_policy": "awaiting_data",
+      "workflow_timeout_s": 3600
+    },
+    "approver_id": "simulated-owner",
+    "before": {
+      "approval_default": "deny",
+      "approval_timeout_s": 600,
+      "breaker": {
+        "cooldown_s": 60,
+        "failure_threshold": 3
+      },
+      "max_cost_microusd": 5000000,
+      "max_loop_iterations": 2,
+      "max_tokens": 100000,
+      "max_tool_retries": 20,
+      "retry": {
+        "base_delay_s": 1,
+        "cap_delay_s": 30,
+        "max_attempts": 3,
+        "max_elapsed_s": 180
+      },
+      "stage_timeout_s": 900,
+      "tool_timeout_s": 120,
+      "unknown_usage_policy": "awaiting_data",
+      "workflow_timeout_s": 3600
+    },
+    "reason": "Example workflow-local tuning at idle HIL boundary",
+    "request": {
+      "action_digest": "92acdf53e77fbb49a690476053aace9759a8c42530e24ba3435ed069d2cb5086",
+      "delivered": true,
+      "expires_at": 1788928360.734003,
+      "issued_at": 1788927760.734003,
+      "kind": "policy",
+      "node_id": null,
+      "payload": {
+        "policy": {
+          "approval_default": "deny",
+          "approval_timeout_s": 600,
+          "breaker": {
+            "cooldown_s": 60,
+            "failure_threshold": 3
+          },
+          "max_cost_microusd": 5000000,
+          "max_loop_iterations": 3,
+          "max_tokens": 100000,
+          "max_tool_retries": 20,
+          "retry": {
+            "base_delay_s": 1,
+            "cap_delay_s": 30,
+            "max_attempts": 3,
+            "max_elapsed_s": 180
+          },
+          "stage_timeout_s": 900,
+          "tool_timeout_s": 120,
+          "unknown_usage_policy": "awaiting_data",
+          "workflow_timeout_s": 3600
+        },
+        "reason": "Example workflow-local tuning at idle HIL boundary"
+      },
+      "version_binding": {
+        "code_fingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "contract_version": 1,
+        "input_digest": "c82faf4b17c3c4d4ba02546cbf49789d5de1113a0300091403009ba59572c9f1",
+        "plan_version": 1,
+        "policy_version": 1,
+        "workflow_id": "WF-0002"
+      }
+    },
+    "version": 2
+  }
+]
+
+## Limits
+
+Trusted registered adapters only. Native provider hooks and human identity integration are not installed.
+The SQLite state is authoritative; this report is a derived snapshot.

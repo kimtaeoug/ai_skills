@@ -1,0 +1,9 @@
+test_empty (__main__.AverageChecks.test_empty) ... ok
+test_negative (__main__.AverageChecks.test_negative) ... ok
+test_positive (__main__.AverageChecks.test_positive) ... ok
+test_single (__main__.AverageChecks.test_single) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.000s
+
+OK

@@ -1,0 +1,682 @@
+{
+  "environment": {
+    "python": "3.14.5 (main, May 10 2026, 10:21:34) [Clang 21.0.0 (clang-2100.0.123.102)]",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "cpu_count": 10,
+    "cwd": "/Users/deratio/skills",
+    "runtime": "/Users/deratio/skills/.claude/skills/task-orchestrator/scripts/graph_runtime.py",
+    "runtime_sha256": "95f831b281b7f353d38c80b75d05259f0a3f18d4a5a03974056a691e8b4b3ea7"
+  },
+  "raw_commands": [
+    [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "/Users/deratio/skills/tests/probe-graph-runtime.py",
+      "--output",
+      "docs/reports/task-orchestrator-v2-2026-09-09/runtime-probe.json"
+    ]
+  ],
+  "method": "Isolated temp Git workspaces; graph_runtime imported in real Python subprocesses; adapter invokes counted by append-only JSONL probe logs.",
+  "criteria": {
+    "double_executes": 0,
+    "overspend": 0,
+    "state_corruption": 0,
+    "show_p95_ms_lt": 2000
+  },
+  "duration_seconds": 19.384052666999196,
+  "cases": [
+    {
+      "name": "show load over 300 workflows",
+      "pass": true,
+      "fixture_workflows": 300,
+      "threshold_p95_ms": 2000,
+      "rows": [
+        {
+          "processes": 1,
+          "calls": 48,
+          "ops_per_second": 91.01651228568902,
+          "p50_ms": 0.1501460010331357,
+          "p95_ms": 0.17558400213602,
+          "max_ms": 0.2072910028800834
+        },
+        {
+          "processes": 4,
+          "calls": 48,
+          "ops_per_second": 266.59020711348774,
+          "p50_ms": 0.17345800188195426,
+          "p95_ms": 0.296041998808505,
+          "max_ms": 0.437082999269478
+        },
+        {
+          "processes": 8,
+          "calls": 48,
+          "ops_per_second": 226.07921953362015,
+          "p50_ms": 0.31766649954079185,
+          "p95_ms": 1.9592090029618703,
+          "max_ms": 4.888374998699874
+        }
+      ]
+    },
+    {
+      "name": "simultaneous same-node execute commits exactly one receipt",
+      "pass": true,
+      "calls": 48,
+      "child_results": [
+        {
+          "ok": true,
+          "status": "completed",
+          "reason": "receipt_committed",
+          "receipts": 1,
+          "reservations": 0,
+          "ms": 269.1776249994291
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.291917000344256
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.3900420017307624
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 3.31858400022611
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.2544999990495853
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.122582998505095
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 3.1024589989101514
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.1980420022155158
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.8584590034151915
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.3375829985307064
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 3.4563749977678526
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 3.6322920022939797
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.4690420030092355
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 3.2873750024009496
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.6252909990726039
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 3.179499999532709
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.6946670002653264
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 3.4300409970455803
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 3.206082998076454
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 11.74991600055364
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.2157499986642506
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 27.979208000033395
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.2435839998943266
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 2.8814170000259764
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 22.732999997970182
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.1340419987391215
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 6.04070799818146
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.1731250015145633
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 2.655249998497311
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.1811670010501985
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.08258299951558
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.407832998665981
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.6533750022063032
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.0781250020954758
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 6.585208000615239
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.4348750009958167
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 3.5685840011865366
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 3.350042003148701
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 5.869291002454702
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 11.49874999828171
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.1219160005566664
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.9145830010529608
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.5809169999556616
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.1181250010849908
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.2781250006810296
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 0.995833001070423
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 1.0611670004436746
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "unsettled_or_completed_attempt",
+          "receipts": 0,
+          "reservations": 1,
+          "ms": 0.8653330005472526
+        }
+      ],
+      "invocation_count": 1,
+      "unexpected_child_errors": [],
+      "receipt_count": 1,
+      "usage": {
+        "cost_microusd": 3,
+        "tokens": 2
+      },
+      "final_status": "completed",
+      "final_reason": "receipt_committed"
+    },
+    {
+      "name": "parallel distinct-node reservations do not exceed caps",
+      "pass": true,
+      "contenders": 8,
+      "token_cap": 40,
+      "route_max_tokens": 10,
+      "invocation_count": 4,
+      "running_or_done": 4,
+      "committed_plus_reserved": 4,
+      "unexpected_child_errors": [],
+      "child_results": [
+        {
+          "ok": true,
+          "status": "ready",
+          "reason": "receipt_committed",
+          "receipts": 1,
+          "reservations": 3,
+          "ms": 484.9837080000725
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "budget_reserved",
+          "receipts": 0,
+          "reservations": 4,
+          "ms": 16.8574589988566
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "budget_reserved",
+          "receipts": 0,
+          "reservations": 4,
+          "ms": 24.069499999313848
+        },
+        {
+          "ok": true,
+          "status": "ready",
+          "reason": "receipt_committed",
+          "receipts": 2,
+          "reservations": 2,
+          "ms": 482.0837080005731
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "budget_reserved",
+          "receipts": 0,
+          "reservations": 4,
+          "ms": 15.080832999956328
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "budget_reserved",
+          "receipts": 0,
+          "reservations": 4,
+          "ms": 14.751291997527005
+        },
+        {
+          "ok": true,
+          "status": "ready",
+          "reason": "receipt_committed",
+          "receipts": 3,
+          "reservations": 1,
+          "ms": 504.00270899990574
+        },
+        {
+          "ok": true,
+          "status": "ready",
+          "reason": "receipt_committed",
+          "receipts": 4,
+          "reservations": 0,
+          "ms": 533.4121250016324
+        }
+      ],
+      "usage": {
+        "cost_microusd": 12,
+        "tokens": 8
+      },
+      "reservations": {},
+      "final_status": "ready",
+      "final_reason": "receipt_committed"
+    },
+    {
+      "name": "workspace breaker half-open allows a single probe across workflows",
+      "pass": true,
+      "workflows": 8,
+      "invocation_count": 1,
+      "unexpected_child_errors": [],
+      "child_results": [
+        {
+          "ok": true,
+          "status": "completed",
+          "reason": "receipt_committed",
+          "receipts": 1,
+          "reservations": 0,
+          "ms": 316.56212500092806
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "adapter_missing_or_circuit_open",
+          "receipts": 0,
+          "reservations": 0,
+          "ms": 2.240124998934334
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "adapter_missing_or_circuit_open",
+          "receipts": 0,
+          "reservations": 0,
+          "ms": 3.6703749974549282
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "adapter_missing_or_circuit_open",
+          "receipts": 0,
+          "reservations": 0,
+          "ms": 1.7989170009968802
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "adapter_missing_or_circuit_open",
+          "receipts": 0,
+          "reservations": 0,
+          "ms": 2.0203329986543395
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "adapter_missing_or_circuit_open",
+          "receipts": 0,
+          "reservations": 0,
+          "ms": 2.3694589981460012
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "adapter_missing_or_circuit_open",
+          "receipts": 0,
+          "reservations": 0,
+          "ms": 1.743292003084207
+        },
+        {
+          "ok": true,
+          "status": "awaiting_data",
+          "reason": "adapter_missing_or_circuit_open",
+          "receipts": 0,
+          "reservations": 0,
+          "ms": 3.437167000811314
+        }
+      ]
+    },
+    {
+      "name": "fault injection preserves reservations and avoids duplicate invokes on resume",
+      "pass": true,
+      "trials": [
+        {
+          "mode": "before_receipt_db_commit",
+          "process_rc": 81,
+          "expected_rc": 81,
+          "after_crash": {
+            "status": "running",
+            "reason": "executing",
+            "receipts": 0,
+            "reservations": 1,
+            "attempt_statuses": [
+              "running"
+            ]
+          },
+          "after_resume": {
+            "status": "awaiting_data",
+            "reason": "unreconciled_intent_or_usage",
+            "receipts": 0,
+            "reservations": 1
+          },
+          "after_execute": {
+            "status": "awaiting_data",
+            "reason": "unsettled_or_completed_attempt",
+            "receipts": 0,
+            "reservations": 1
+          },
+          "invocation_count": 1
+        },
+        {
+          "mode": "after_receipt_db_commit",
+          "process_rc": 82,
+          "expected_rc": 82,
+          "after_crash": {
+            "status": "completed",
+            "reason": "receipt_committed",
+            "receipts": 1,
+            "reservations": 0,
+            "attempt_statuses": [
+              "done"
+            ]
+          },
+          "after_resume": {
+            "status": "completed",
+            "reason": "receipt_committed",
+            "receipts": 1,
+            "reservations": 0
+          },
+          "after_execute": {
+            "status": "completed",
+            "reason": "receipt_committed",
+            "receipts": 1,
+            "reservations": 0
+          },
+          "invocation_count": 1
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "total": 5,
+    "all_passed": true
+  }
+}

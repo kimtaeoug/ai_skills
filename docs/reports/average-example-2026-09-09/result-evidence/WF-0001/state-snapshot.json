@@ -1,0 +1,983 @@
+{
+  "action_approval": null,
+  "approvals": [
+    {
+      "action_digest": "82c04247e61fb3bfa26e95274996e5bfcda2b56be8f70c695c97e935b8c67a1b",
+      "approval_id": "APPROVAL-0001",
+      "approver_id": "simulated-owner",
+      "auth_evidence_ref": {
+        "bytes": 281,
+        "media_type": "application/json",
+        "sha256": "5fe4790eda9d59492f1986f347eeebd0e00e8ef80be27c9d7961769b3e263e62",
+        "uri": "artifacts/5fe4790eda9d59492f1986f347eeebd0e00e8ef80be27c9d7961769b3e263e62"
+      },
+      "decision": "approve",
+      "expires_at": 1788928005.0428765,
+      "issued_at": 1788927405.0428765,
+      "single_use": true,
+      "version_binding": {
+        "code_fingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "contract_version": 1,
+        "input_digest": "c0e6cd8aa0c6459dbcb1b49bd455ba20697f2b0a9f8426eeb1e8b56b7c3ea128",
+        "plan_version": 1,
+        "policy_version": 1,
+        "workflow_id": "WF-0001"
+      }
+    },
+    {
+      "action_digest": "692e1f40ff98098c1e73a72d83e933ac8efdb01a23fa1e05d0bf9d100629622f",
+      "approval_id": "APPROVAL-0002",
+      "approver_id": "simulated-owner",
+      "auth_evidence_ref": {
+        "bytes": 282,
+        "media_type": "application/json",
+        "sha256": "eedf359c10d2846c4da1e054474ad99a26887af2ed55723c60b108f8972b571e",
+        "uri": "artifacts/eedf359c10d2846c4da1e054474ad99a26887af2ed55723c60b108f8972b571e"
+      },
+      "decision": "approve",
+      "expires_at": 1788928005.1382139,
+      "issued_at": 1788927405.1382139,
+      "single_use": true,
+      "version_binding": {
+        "code_fingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "contract_version": 1,
+        "input_digest": "c82faf4b17c3c4d4ba02546cbf49789d5de1113a0300091403009ba59572c9f1",
+        "plan_version": 1,
+        "policy_version": 1,
+        "workflow_id": "WF-0001"
+      }
+    }
+  ],
+  "attempts": [
+    {
+      "actor": {
+        "kind": "external_system",
+        "principal_id": "local-example",
+        "role": "develop"
+      },
+      "attempt_id": "DEV-01/attempt-1",
+      "evidence_results": [
+        {
+          "check_id": "diff_ref",
+          "evidence_refs": [
+            {
+              "bytes": 105,
+              "media_type": "text/plain",
+              "sha256": "5ec0cd385e3ef34ba64686d22d72cdde1ef4c9d9281aca59bf48eb16ef2b0331",
+              "uri": "artifacts/5ec0cd385e3ef34ba64686d22d72cdde1ef4c9d9281aca59bf48eb16ef2b0331"
+            }
+          ],
+          "observed_at": 1788927405.1192472,
+          "status": "pass",
+          "subject_digest": "13fa186a08850bb95cfd43dd068e3c74ae6039e264972c0d5b23353d8318c59c",
+          "validator_id": "nonempty_artifact",
+          "validator_version": "1"
+        }
+      ],
+      "finished_at": 1788927405.1366565,
+      "input_ref": {
+        "bytes": 646,
+        "media_type": "application/json",
+        "sha256": "f3596be7e9194a7c893839b49b73f36099a8fbc2597b14eb291baee8f9dbda42",
+        "uri": "artifacts/f3596be7e9194a7c893839b49b73f36099a8fbc2597b14eb291baee8f9dbda42"
+      },
+      "intent": null,
+      "node_id": "DEV-01",
+      "receipt": {
+        "bytes": 1656,
+        "media_type": "application/json",
+        "sha256": "69edf1e7714ffa635e90a4912789575ae87b4e34cf7ff31d2e48c6d3559b0f99",
+        "uri": "artifacts/69edf1e7714ffa635e90a4912789575ae87b4e34cf7ff31d2e48c6d3559b0f99"
+      },
+      "route": "develop",
+      "started_at": 1788927405.1146083,
+      "status": "done",
+      "timeout_s": 120,
+      "usage": {
+        "cost_microusd": 0,
+        "input_tokens": 0,
+        "meter_id": "local-no-provider",
+        "other_billable_tokens": 0,
+        "output_tokens": 0,
+        "price_version": "no-billable-operation-v1"
+      },
+      "version_binding": {
+        "code_fingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "contract_version": 1,
+        "input_digest": "f3596be7e9194a7c893839b49b73f36099a8fbc2597b14eb291baee8f9dbda42",
+        "plan_version": 1,
+        "policy_version": 1,
+        "workflow_id": "WF-0001"
+      }
+    },
+    {
+      "actor": {
+        "kind": "external_system",
+        "principal_id": "local-example",
+        "role": "code_test"
+      },
+      "attempt_id": "TEST-01/attempt-1",
+      "evidence_results": [
+        {
+          "check_id": "test_results_ref",
+          "evidence_refs": [
+            {
+              "bytes": 54,
+              "media_type": "application/json",
+              "sha256": "0d4009b965e1940919f744fd8811dd11fcd2133cc84ce97caaf622c71e60edb4",
+              "uri": "artifacts/0d4009b965e1940919f744fd8811dd11fcd2133cc84ce97caaf622c71e60edb4"
+            }
+          ],
+          "observed_at": 1788927405.2625718,
+          "status": "fail",
+          "subject_digest": "0d4fa3686ca562caacc26d7281cc7e15f39cb30740435fae05a00b8b1ab606c3",
+          "validator_id": "json_success",
+          "validator_version": "1"
+        },
+        {
+          "check_id": "log_ref",
+          "evidence_refs": [
+            {
+              "bytes": 691,
+              "media_type": "text/plain",
+              "sha256": "d371b5d8e9f7dfff6cf62a70adf448aad21347e774f4984c2fc556c6b227ea3b",
+              "uri": "artifacts/d371b5d8e9f7dfff6cf62a70adf448aad21347e774f4984c2fc556c6b227ea3b"
+            }
+          ],
+          "observed_at": 1788927405.2626288,
+          "status": "pass",
+          "subject_digest": "0d4fa3686ca562caacc26d7281cc7e15f39cb30740435fae05a00b8b1ab606c3",
+          "validator_id": "nonempty_artifact",
+          "validator_version": "1"
+        },
+        {
+          "check_id": "exit_code",
+          "evidence_refs": [],
+          "observed_at": 1788927405.2626328,
+          "status": "fail",
+          "subject_digest": "0d4fa3686ca562caacc26d7281cc7e15f39cb30740435fae05a00b8b1ab606c3",
+          "validator_id": "equals",
+          "validator_version": "1"
+        }
+      ],
+      "finished_at": 1788927405.2626374,
+      "input_ref": {
+        "bytes": 428,
+        "media_type": "application/json",
+        "sha256": "c289ad6b65bb67440d1dbf2389cb4a90f20aaa4891f3177da2311dcfeca71f76",
+        "uri": "artifacts/c289ad6b65bb67440d1dbf2389cb4a90f20aaa4891f3177da2311dcfeca71f76"
+      },
+      "intent": null,
+      "node_id": "TEST-01",
+      "reason": "evidence_gate_failed",
+      "route": "code_test",
+      "started_at": 1788927405.2211785,
+      "status": "failed",
+      "timeout_s": 120,
+      "usage": {
+        "cost_microusd": 0,
+        "input_tokens": 0,
+        "meter_id": "local-no-provider",
+        "other_billable_tokens": 0,
+        "output_tokens": 0,
+        "price_version": "no-billable-operation-v1"
+      },
+      "version_binding": {
+        "code_fingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "contract_version": 1,
+        "input_digest": "c289ad6b65bb67440d1dbf2389cb4a90f20aaa4891f3177da2311dcfeca71f76",
+        "plan_version": 1,
+        "policy_version": 2,
+        "workflow_id": "WF-0001"
+      }
+    }
+  ],
+  "checkpoint": {
+    "bytes": 1656,
+    "media_type": "application/json",
+    "sha256": "69edf1e7714ffa635e90a4912789575ae87b4e34cf7ff31d2e48c6d3559b0f99",
+    "uri": "artifacts/69edf1e7714ffa635e90a4912789575ae87b4e34cf7ff31d2e48c6d3559b0f99"
+  },
+  "clock": {
+    "consumed_s": 0.1807537078857422,
+    "hil_wait_intervals": [
+      [
+        1788927405.0583851,
+        1788927405.07878
+      ],
+      [
+        1788927405.1551516,
+        1788927405.173594
+      ]
+    ],
+    "last_accounted_at": 1788927405.2617254,
+    "waiting_since": null
+  },
+  "contract": {
+    "approvers": [
+      "simulated-owner"
+    ],
+    "edges": [
+      {
+        "edge_id": "EDGE-01",
+        "from": "DEV-01",
+        "guards": [
+          "receipt_valid",
+          "budget_remaining"
+        ],
+        "on_invalid": "failed",
+        "on_missing": "awaiting_data",
+        "required_inputs": [],
+        "required_receipts": [],
+        "to": "TEST-01",
+        "trigger": "success"
+      },
+      {
+        "edge_id": "EDGE-02",
+        "from": "TEST-01",
+        "guards": [
+          "receipt_valid",
+          "budget_remaining"
+        ],
+        "on_invalid": "failed",
+        "on_missing": "awaiting_data",
+        "required_inputs": [],
+        "required_receipts": [],
+        "to": "REPORT-01",
+        "trigger": "success"
+      },
+      {
+        "edge_id": "LOOP-01",
+        "from": "TEST-01",
+        "guards": [
+          "receipt_valid",
+          "budget_remaining"
+        ],
+        "on_invalid": "failed",
+        "on_missing": "awaiting_data",
+        "required_inputs": [],
+        "required_receipts": [],
+        "to": "DEV-01",
+        "trigger": "loop"
+      }
+    ],
+    "nodes": [
+      {
+        "actor": {
+          "kind": "external_system",
+          "principal_id": "local-example",
+          "role": "develop"
+        },
+        "input_schema": {
+          "properties": {
+            "approved_plan_ref": {
+              "properties": {
+                "bytes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "sha256",
+                "media_type",
+                "bytes"
+              ],
+              "type": "object"
+            },
+            "baseline_ref": {
+              "properties": {
+                "bytes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "sha256",
+                "media_type",
+                "bytes"
+              ],
+              "type": "object"
+            },
+            "work_item_ref": {
+              "properties": {
+                "bytes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "sha256",
+                "media_type",
+                "bytes"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "work_item_ref",
+            "approved_plan_ref",
+            "baseline_ref"
+          ],
+          "type": "object"
+        },
+        "kind": "develop",
+        "node_id": "DEV-01",
+        "output_schema": {
+          "properties": {
+            "change_summary_ref": {
+              "properties": {
+                "bytes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "sha256",
+                "media_type",
+                "bytes"
+              ],
+              "type": "object"
+            },
+            "diff_ref": {
+              "properties": {
+                "bytes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "sha256",
+                "media_type",
+                "bytes"
+              ],
+              "type": "object"
+            },
+            "result_refs": {
+              "items": {
+                "properties": {
+                  "bytes": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "media_type": {
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "type": "string"
+                  },
+                  "uri": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "uri",
+                  "sha256",
+                  "media_type",
+                  "bytes"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "diff_ref",
+            "result_refs",
+            "change_summary_ref"
+          ],
+          "type": "object"
+        },
+        "required_evidence": [
+          {
+            "field": "diff_ref",
+            "validator": "nonempty_artifact"
+          }
+        ],
+        "tool_routes": [
+          "develop"
+        ]
+      },
+      {
+        "actor": {
+          "kind": "external_system",
+          "principal_id": "local-example",
+          "role": "code_test"
+        },
+        "input_schema": {
+          "properties": {
+            "code_ref": {
+              "properties": {
+                "bytes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "sha256",
+                "media_type",
+                "bytes"
+              ],
+              "type": "object"
+            },
+            "test_spec_ref": {
+              "properties": {
+                "bytes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "sha256",
+                "media_type",
+                "bytes"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "code_ref",
+            "test_spec_ref"
+          ],
+          "type": "object"
+        },
+        "kind": "code_test",
+        "node_id": "TEST-01",
+        "output_schema": {
+          "properties": {
+            "exit_code": {
+              "type": "integer"
+            },
+            "log_ref": {
+              "properties": {
+                "bytes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "sha256",
+                "media_type",
+                "bytes"
+              ],
+              "type": "object"
+            },
+            "test_results_ref": {
+              "properties": {
+                "bytes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "sha256",
+                "media_type",
+                "bytes"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "test_results_ref",
+            "log_ref",
+            "exit_code"
+          ],
+          "type": "object"
+        },
+        "required_evidence": [
+          {
+            "field": "test_results_ref",
+            "validator": "json_success"
+          },
+          {
+            "field": "log_ref",
+            "validator": "nonempty_artifact"
+          },
+          {
+            "field": "exit_code",
+            "validator": "equals",
+            "value": 0
+          }
+        ],
+        "tool_routes": [
+          "code_test"
+        ]
+      },
+      {
+        "actor": {
+          "kind": "external_system",
+          "principal_id": "local-example",
+          "role": "report"
+        },
+        "input_schema": {
+          "properties": {
+            "approved_result_ref": {
+              "properties": {
+                "bytes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "sha256",
+                "media_type",
+                "bytes"
+              ],
+              "type": "object"
+            },
+            "receipt_refs": {
+              "items": {
+                "properties": {
+                  "bytes": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "media_type": {
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "type": "string"
+                  },
+                  "uri": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "uri",
+                  "sha256",
+                  "media_type",
+                  "bytes"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "usage_summary_ref": {
+              "properties": {
+                "bytes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "sha256",
+                "media_type",
+                "bytes"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "approved_result_ref",
+            "receipt_refs",
+            "usage_summary_ref"
+          ],
+          "type": "object"
+        },
+        "kind": "report",
+        "node_id": "REPORT-01",
+        "output_schema": {
+          "properties": {
+            "report_ref": {
+              "properties": {
+                "bytes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "sha256",
+                "media_type",
+                "bytes"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "report_ref"
+          ],
+          "type": "object"
+        },
+        "required_evidence": [
+          {
+            "field": "report_ref",
+            "validator": "nonempty_artifact"
+          }
+        ],
+        "tool_routes": [
+          "report"
+        ]
+      }
+    ],
+    "title": "SIMULATION: average([]) returns None; no UI/research/model"
+  },
+  "contract_approved": true,
+  "contract_version": 1,
+  "history": [
+    {
+      "at": 1788927405.0583923,
+      "event": "create",
+      "revision": 1,
+      "status": "awaiting_data"
+    },
+    {
+      "at": 1788927405.0792994,
+      "event": {
+        "approve": "82c04247e61fb3bfa26e95274996e5bfcda2b56be8f70c695c97e935b8c67a1b",
+        "principal": "simulated-owner"
+      },
+      "revision": 2,
+      "status": "ready"
+    },
+    {
+      "at": 1788927405.1150188,
+      "event": {
+        "before_tool_call": "DEV-01"
+      },
+      "revision": 3,
+      "status": "running"
+    },
+    {
+      "at": 1788927405.1366723,
+      "event": {
+        "settle": "DEV-01/attempt-1"
+      },
+      "revision": 4,
+      "status": "ready"
+    },
+    {
+      "at": 1788927405.1551628,
+      "event": "request_tuning",
+      "revision": 5,
+      "status": "awaiting_data"
+    },
+    {
+      "at": 1788927405.173962,
+      "event": {
+        "approve": "692e1f40ff98098c1e73a72d83e933ac8efdb01a23fa1e05d0bf9d100629622f",
+        "principal": "simulated-owner"
+      },
+      "revision": 6,
+      "status": "ready"
+    },
+    {
+      "at": 1788927405.2215962,
+      "event": {
+        "before_tool_call": "TEST-01"
+      },
+      "revision": 7,
+      "status": "running"
+    },
+    {
+      "at": 1788927405.262642,
+      "event": {
+        "settle": "TEST-01/attempt-1"
+      },
+      "revision": 8,
+      "status": "failed"
+    },
+    {
+      "at": 1788927405.2637866,
+      "event": "resume_budget_check",
+      "revision": 9,
+      "status": "failed"
+    }
+  ],
+  "id": "WF-0001",
+  "loop_iterations": 0,
+  "nodes": {
+    "DEV-01": {
+      "attempts": 1,
+      "clock": {
+        "consumed_s": 0.03683066368103027,
+        "hil_wait_intervals": [],
+        "last_accounted_at": 1788927405.1183503,
+        "waiting_since": null
+      },
+      "not_before": 0,
+      "receipt": {
+        "bytes": 1656,
+        "media_type": "application/json",
+        "sha256": "69edf1e7714ffa635e90a4912789575ae87b4e34cf7ff31d2e48c6d3559b0f99",
+        "uri": "artifacts/69edf1e7714ffa635e90a4912789575ae87b4e34cf7ff31d2e48c6d3559b0f99"
+      },
+      "route_index": 0,
+      "status": "done"
+    },
+    "REPORT-01": {
+      "attempts": 0,
+      "clock": null,
+      "not_before": 0,
+      "receipt": null,
+      "route_index": 0,
+      "status": "pending"
+    },
+    "TEST-01": {
+      "attempts": 1,
+      "clock": {
+        "consumed_s": 0.06969904899597168,
+        "hil_wait_intervals": [],
+        "last_accounted_at": 1788927405.2617254,
+        "waiting_since": null
+      },
+      "not_before": 0,
+      "receipt": null,
+      "route_index": 0,
+      "status": "failed"
+    }
+  },
+  "pending_approval": null,
+  "plan_version": 1,
+  "policy": {
+    "approval_default": "deny",
+    "approval_timeout_s": 600,
+    "breaker": {
+      "cooldown_s": 60,
+      "failure_threshold": 3
+    },
+    "max_cost_microusd": 5000000,
+    "max_loop_iterations": 3,
+    "max_tokens": 100000,
+    "max_tool_retries": 20,
+    "retry": {
+      "base_delay_s": 1,
+      "cap_delay_s": 30,
+      "max_attempts": 3,
+      "max_elapsed_s": 180
+    },
+    "stage_timeout_s": 900,
+    "tool_timeout_s": 120,
+    "unknown_usage_policy": "awaiting_data",
+    "workflow_timeout_s": 3600
+  },
+  "policy_history": [
+    {
+      "after": {
+        "approval_default": "deny",
+        "approval_timeout_s": 600,
+        "breaker": {
+          "cooldown_s": 60,
+          "failure_threshold": 3
+        },
+        "max_cost_microusd": 5000000,
+        "max_loop_iterations": 3,
+        "max_tokens": 100000,
+        "max_tool_retries": 20,
+        "retry": {
+          "base_delay_s": 1,
+          "cap_delay_s": 30,
+          "max_attempts": 3,
+          "max_elapsed_s": 180
+        },
+        "stage_timeout_s": 900,
+        "tool_timeout_s": 120,
+        "unknown_usage_policy": "awaiting_data",
+        "workflow_timeout_s": 3600
+      },
+      "approver_id": "simulated-owner",
+      "before": {
+        "approval_default": "deny",
+        "approval_timeout_s": 600,
+        "breaker": {
+          "cooldown_s": 60,
+          "failure_threshold": 3
+        },
+        "max_cost_microusd": 5000000,
+        "max_loop_iterations": 2,
+        "max_tokens": 100000,
+        "max_tool_retries": 20,
+        "retry": {
+          "base_delay_s": 1,
+          "cap_delay_s": 30,
+          "max_attempts": 3,
+          "max_elapsed_s": 180
+        },
+        "stage_timeout_s": 900,
+        "tool_timeout_s": 120,
+        "unknown_usage_policy": "awaiting_data",
+        "workflow_timeout_s": 3600
+      },
+      "reason": "Example workflow-local tuning at idle HIL boundary",
+      "request": {
+        "action_digest": "692e1f40ff98098c1e73a72d83e933ac8efdb01a23fa1e05d0bf9d100629622f",
+        "delivered": true,
+        "expires_at": 1788928005.1382139,
+        "issued_at": 1788927405.1382139,
+        "kind": "policy",
+        "node_id": null,
+        "payload": {
+          "policy": {
+            "approval_default": "deny",
+            "approval_timeout_s": 600,
+            "breaker": {
+              "cooldown_s": 60,
+              "failure_threshold": 3
+            },
+            "max_cost_microusd": 5000000,
+            "max_loop_iterations": 3,
+            "max_tokens": 100000,
+            "max_tool_retries": 20,
+            "retry": {
+              "base_delay_s": 1,
+              "cap_delay_s": 30,
+              "max_attempts": 3,
+              "max_elapsed_s": 180
+            },
+            "stage_timeout_s": 900,
+            "tool_timeout_s": 120,
+            "unknown_usage_policy": "awaiting_data",
+            "workflow_timeout_s": 3600
+          },
+          "reason": "Example workflow-local tuning at idle HIL boundary"
+        },
+        "version_binding": {
+          "code_fingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "contract_version": 1,
+          "input_digest": "c82faf4b17c3c4d4ba02546cbf49789d5de1113a0300091403009ba59572c9f1",
+          "plan_version": 1,
+          "policy_version": 1,
+          "workflow_id": "WF-0001"
+        }
+      },
+      "version": 2
+    }
+  ],
+  "policy_version": 2,
+  "reason": "evidence_gate_failed",
+  "receipts": [
+    {
+      "bytes": 1656,
+      "media_type": "application/json",
+      "sha256": "69edf1e7714ffa635e90a4912789575ae87b4e34cf7ff31d2e48c6d3559b0f99",
+      "uri": "artifacts/69edf1e7714ffa635e90a4912789575ae87b4e34cf7ff31d2e48c6d3559b0f99"
+    }
+  ],
+  "reservations": {},
+  "revision": 9,
+  "schema": 2,
+  "status": "failed",
+  "tool_retries": 0,
+  "usage": {
+    "cost_microusd": 0,
+    "tokens": 0
+  }
+}

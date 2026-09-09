@@ -1,0 +1,124 @@
+# WF-0001: SIMULATION: average([]) returns None; no UI/research/model
+
+Status: completed (revision 15)
+
+Reason: receipt_committed
+Policy version: 2
+Execution seconds: 0.3727288246154785
+Usage: {"cost_microusd": 0, "tokens": 0}
+Unsettled reservations: 0
+
+## Receipts
+
+- [ced54a04cbac4a7968441ab79c2ef63e4a8ea101b6794058406bbbe13d6bbd94](artifacts/ced54a04cbac4a7968441ab79c2ef63e4a8ea101b6794058406bbbe13d6bbd94)
+- [96f1ac4718b0316918726c1a349951c1d6edf016f4397cc7c9c03234de3660db](artifacts/96f1ac4718b0316918726c1a349951c1d6edf016f4397cc7c9c03234de3660db)
+- [fdb76a60e7e5baaaeca3821ea620895476dc497926d005558c1b48299b0d286b](artifacts/fdb76a60e7e5baaaeca3821ea620895476dc497926d005558c1b48299b0d286b)
+- [59a2e519b9c4d557b8a3c7954ae89304493ef6ed8a4cd457331e0d0d78e274af](artifacts/59a2e519b9c4d557b8a3c7954ae89304493ef6ed8a4cd457331e0d0d78e274af)
+
+## Attempts
+
+- DEV-01/attempt-1: done; route develop; reason verified
+- TEST-01/attempt-1: failed; route code_test; reason evidence_gate_failed
+- DEV-01/attempt-2: done; route develop; reason verified
+- TEST-01/attempt-2: done; route code_test; reason verified
+- REPORT-01/attempt-1: done; route report; reason verified
+
+## Policy changes
+
+[
+  {
+    "after": {
+      "approval_default": "deny",
+      "approval_timeout_s": 600,
+      "breaker": {
+        "cooldown_s": 60,
+        "failure_threshold": 3
+      },
+      "max_cost_microusd": 5000000,
+      "max_loop_iterations": 3,
+      "max_tokens": 100000,
+      "max_tool_retries": 20,
+      "retry": {
+        "base_delay_s": 1,
+        "cap_delay_s": 30,
+        "max_attempts": 3,
+        "max_elapsed_s": 180
+      },
+      "stage_timeout_s": 900,
+      "tool_timeout_s": 120,
+      "unknown_usage_policy": "awaiting_data",
+      "workflow_timeout_s": 3600
+    },
+    "approver_id": "simulated-owner",
+    "before": {
+      "approval_default": "deny",
+      "approval_timeout_s": 600,
+      "breaker": {
+        "cooldown_s": 60,
+        "failure_threshold": 3
+      },
+      "max_cost_microusd": 5000000,
+      "max_loop_iterations": 2,
+      "max_tokens": 100000,
+      "max_tool_retries": 20,
+      "retry": {
+        "base_delay_s": 1,
+        "cap_delay_s": 30,
+        "max_attempts": 3,
+        "max_elapsed_s": 180
+      },
+      "stage_timeout_s": 900,
+      "tool_timeout_s": 120,
+      "unknown_usage_policy": "awaiting_data",
+      "workflow_timeout_s": 3600
+    },
+    "reason": "Example workflow-local tuning at idle HIL boundary",
+    "request": {
+      "action_digest": "ea88e2b07a66efa3805a483016c4055fdd8d214ddabcd69733b139267c06b2ba",
+      "delivered": true,
+      "expires_at": 1788928360.2386785,
+      "issued_at": 1788927760.2386785,
+      "kind": "policy",
+      "node_id": null,
+      "payload": {
+        "policy": {
+          "approval_default": "deny",
+          "approval_timeout_s": 600,
+          "breaker": {
+            "cooldown_s": 60,
+            "failure_threshold": 3
+          },
+          "max_cost_microusd": 5000000,
+          "max_loop_iterations": 3,
+          "max_tokens": 100000,
+          "max_tool_retries": 20,
+          "retry": {
+            "base_delay_s": 1,
+            "cap_delay_s": 30,
+            "max_attempts": 3,
+            "max_elapsed_s": 180
+          },
+          "stage_timeout_s": 900,
+          "tool_timeout_s": 120,
+          "unknown_usage_policy": "awaiting_data",
+          "workflow_timeout_s": 3600
+        },
+        "reason": "Example workflow-local tuning at idle HIL boundary"
+      },
+      "version_binding": {
+        "code_fingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "contract_version": 1,
+        "input_digest": "c82faf4b17c3c4d4ba02546cbf49789d5de1113a0300091403009ba59572c9f1",
+        "plan_version": 1,
+        "policy_version": 1,
+        "workflow_id": "WF-0001"
+      }
+    },
+    "version": 2
+  }
+]
+
+## Limits
+
+Trusted registered adapters only. Native provider hooks and human identity integration are not installed.
+The SQLite state is authoritative; this report is a derived snapshot.

@@ -10,6 +10,25 @@ description: '임의의 대상 레포지토리에 대고 "테스트 에이전트
 화면(UI) 테스트는 병렬 그룹과 분리해 직렬로 실행한다. 새 의존성을 설치하거나 기존 도구를
 "더 빠른 대안"으로 자동 교체하지 않는다 — 도구가 전혀 없을 때만 최소 권장안을 제안으로만 보고한다.
 
+## Managed mode (`task-orchestrator`)
+
+`task-orchestrator`가 이 스킬을 호출할 때는 오케스트레이터가 task root, local task id,
+criteria version, code fingerprint, `TEST-##`, attempt, artifact dir, UI impact(`yes`/`no`/
+`unknown`)를 제공한다. 이 스킬은 검증만 수행하고 completion 판단은 하지 않는다.
+이 managed branch가 적용되면 결과를 반환하고 아래 standalone 실행 섹션으로 계속 진행하지 않는다.
+
+- 코드 검사는 현재 레포의 기존 명령만 사용한다.
+- UI impact가 `yes` 또는 `unknown`이면 실제 브라우저 기반 화면 테스트를 포함한다. 상호작용 확인과
+  스크린샷/시각 검사를 둘 다 남긴다.
+- 브라우저나 서버가 막히면 `blocked`이며, `pass`로 대체하지 않는다.
+- 아래 본문의 관련 규칙은 managed mode에서도 유지한다: 저장소 CI/script 기반 도구 탐지, 코드 검사
+  병렬 안전 기준, UI 단일 lane, 자신이 띄운 dev server PID만 정리, dApp 지갑 테스트 hard-stop/
+  무자산 테스트 계정/민감정보 보호 가드레일.
+- child role은 리더가 직접 dispatch한다. managed mode child는 자기 하위 team/subagent를 다시
+  만들지 않는다.
+- 결과는 `pass`/`fail`/`blocked`/`not-applicable`/`not-found`, 실행 명령, 핵심 로그, screenshot
+  경로, code fingerprint를 artifact dir에 기록한다.
+
 ## 0. 시작 전 공통 절차
 
 1. 대상 경로 존재 확인: `test -d <path>`.

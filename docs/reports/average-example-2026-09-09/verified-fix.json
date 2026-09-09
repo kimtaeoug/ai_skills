@@ -1,0 +1,78 @@
+{
+  "workspace": "/private/var/folders/n1/lqgp64vj5rb703jk5c2_qw900000gn/T/average-workflow-035yyykg",
+  "human_approval": "SIMULATED, not actual user approval",
+  "model_calls": 0,
+  "ui_impact": "no",
+  "failing_example": {
+    "workflow": "WF-0001",
+    "test": {
+      "exit_code": 1,
+      "failed": 1,
+      "fatal_errors": 0,
+      "passed": 3
+    },
+    "log": "/private/var/folders/n1/lqgp64vj5rb703jk5c2_qw900000gn/T/average-workflow-035yyykg/nimbalyst-local/tasks/WF-0001/artifacts/d371b5d8e9f7dfff6cf62a70adf448aad21347e774f4984c2fc556c6b227ea3b",
+    "policy_version": 2,
+    "policy_tuning_preserved_usage": true,
+    "status": "ready",
+    "reason": "loop_edge",
+    "loop_error": null,
+    "loop_iterations": 1,
+    "report": "/private/var/folders/n1/lqgp64vj5rb703jk5c2_qw900000gn/T/average-workflow-035yyykg/nimbalyst-local/tasks/WF-0001/report.md"
+  },
+  "same_workflow_rework": {
+    "workflow": "WF-0001",
+    "test": {
+      "exit_code": 0,
+      "failed": 0,
+      "fatal_errors": 0,
+      "passed": 4
+    },
+    "log": "/private/var/folders/n1/lqgp64vj5rb703jk5c2_qw900000gn/T/average-workflow-035yyykg/nimbalyst-local/tasks/WF-0001/artifacts/6f16cb9e88e47b31b28423043c3cad1892256560caf16572ca5e701290deb442",
+    "policy_version": 2,
+    "policy_tuning_preserved_usage": true,
+    "status": "completed",
+    "loop_iterations": 1,
+    "receipts": 4,
+    "attempts": [
+      {
+        "id": "DEV-01/attempt-1",
+        "status": "done"
+      },
+      {
+        "id": "TEST-01/attempt-1",
+        "status": "failed"
+      },
+      {
+        "id": "DEV-01/attempt-2",
+        "status": "done"
+      },
+      {
+        "id": "TEST-01/attempt-2",
+        "status": "done"
+      },
+      {
+        "id": "REPORT-01/attempt-1",
+        "status": "done"
+      }
+    ],
+    "report": "/private/var/folders/n1/lqgp64vj5rb703jk5c2_qw900000gn/T/average-workflow-035yyykg/nimbalyst-local/tasks/WF-0001/report.md"
+  },
+  "corrected_separate_control": {
+    "workflow": "WF-0002",
+    "test": {
+      "exit_code": 0,
+      "failed": 0,
+      "fatal_errors": 0,
+      "passed": 4
+    },
+    "log": "/private/var/folders/n1/lqgp64vj5rb703jk5c2_qw900000gn/T/average-workflow-035yyykg/nimbalyst-local/tasks/WF-0002/artifacts/6f16cb9e88e47b31b28423043c3cad1892256560caf16572ca5e701290deb442",
+    "policy_version": 2,
+    "policy_tuning_preserved_usage": true,
+    "status": "completed",
+    "receipts": 3,
+    "report": "/private/var/folders/n1/lqgp64vj5rb703jk5c2_qw900000gn/T/average-workflow-035yyykg/nimbalyst-local/tasks/WF-0002/report.md"
+  },
+  "requested_rework_loop_passed": true,
+  "evidence_export": "/Users/deratio/skills/docs/reports/average-example-2026-09-09/verified-fix-evidence"
+}

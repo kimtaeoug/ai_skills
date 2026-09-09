@@ -1,0 +1,6 @@
+--- before.py
++++ average.py
+@@ -1,2 +1,2 @@
+ def average(values):
+-    return sum(values) / len(values)
++    return sum(values) / len(values) if values else None

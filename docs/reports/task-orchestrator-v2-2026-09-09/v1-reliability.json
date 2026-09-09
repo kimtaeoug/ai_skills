@@ -1,0 +1,301 @@
+{
+  "environment": {
+    "python": "3.14.5 (main, May 10 2026, 10:21:34) [Clang 21.0.0 (clang-2100.0.123.102)]",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "cpu_count": 10
+  },
+  "method": "Isolated temp Git repos; real CLI subprocesses for concurrent mutations; deterministic os._exit fault injection.",
+  "duration_seconds": 29.98839266700088,
+  "thresholds": {
+    "unexpected_errors": 0,
+    "duplicate_task_ids": 0,
+    "accepted_stale_revision_writers": 0,
+    "false_authoritative_completion_after_crash": 0
+  },
+  "probes": [
+    {
+      "name": "parallel task ID allocation",
+      "pass": true,
+      "attempts": 64,
+      "successes": 64,
+      "unique_ids": 64,
+      "min_id": "TASK-0001",
+      "max_id": "TASK-0064",
+      "failures": []
+    },
+    {
+      "name": "same-revision write conflict",
+      "pass": true,
+      "rounds": 10,
+      "contenders_per_round": 32,
+      "details": [
+        {
+          "successes": 1,
+          "revision_conflicts": 31,
+          "final_revision": 1,
+          "history_entries": 1
+        },
+        {
+          "successes": 1,
+          "revision_conflicts": 31,
+          "final_revision": 1,
+          "history_entries": 1
+        },
+        {
+          "successes": 1,
+          "revision_conflicts": 31,
+          "final_revision": 1,
+          "history_entries": 1
+        },
+        {
+          "successes": 1,
+          "revision_conflicts": 31,
+          "final_revision": 1,
+          "history_entries": 1
+        },
+        {
+          "successes": 1,
+          "revision_conflicts": 31,
+          "final_revision": 1,
+          "history_entries": 1
+        },
+        {
+          "successes": 1,
+          "revision_conflicts": 31,
+          "final_revision": 1,
+          "history_entries": 1
+        },
+        {
+          "successes": 1,
+          "revision_conflicts": 31,
+          "final_revision": 1,
+          "history_entries": 1
+        },
+        {
+          "successes": 1,
+          "revision_conflicts": 31,
+          "final_revision": 1,
+          "history_entries": 1
+        },
+        {
+          "successes": 1,
+          "revision_conflicts": 31,
+          "final_revision": 1,
+          "history_entries": 1
+        },
+        {
+          "successes": 1,
+          "revision_conflicts": 31,
+          "final_revision": 1,
+          "history_entries": 1
+        }
+      ]
+    },
+    {
+      "name": "cross-task same-file claim",
+      "pass": true,
+      "rounds": 10,
+      "contenders_per_round": 2,
+      "details": [
+        {
+          "successes": 1,
+          "conflicts": 1,
+          "running_items": 1
+        },
+        {
+          "successes": 1,
+          "conflicts": 1,
+          "running_items": 1
+        },
+        {
+          "successes": 1,
+          "conflicts": 1,
+          "running_items": 1
+        },
+        {
+          "successes": 1,
+          "conflicts": 1,
+          "running_items": 1
+        },
+        {
+          "successes": 1,
+          "conflicts": 1,
+          "running_items": 1
+        },
+        {
+          "successes": 1,
+          "conflicts": 1,
+          "running_items": 1
+        },
+        {
+          "successes": 1,
+          "conflicts": 1,
+          "running_items": 1
+        },
+        {
+          "successes": 1,
+          "conflicts": 1,
+          "running_items": 1
+        },
+        {
+          "successes": 1,
+          "conflicts": 1,
+          "running_items": 1
+        },
+        {
+          "successes": 1,
+          "conflicts": 1,
+          "running_items": 1
+        }
+      ]
+    },
+    {
+      "name": "workspace running cap",
+      "pass": true,
+      "rounds": 10,
+      "contenders_per_round": 8,
+      "configured_cap": 4,
+      "details": [
+        {
+          "successes": 4,
+          "rejected_by_cap": 4,
+          "running_items": 4
+        },
+        {
+          "successes": 4,
+          "rejected_by_cap": 4,
+          "running_items": 4
+        },
+        {
+          "successes": 4,
+          "rejected_by_cap": 4,
+          "running_items": 4
+        },
+        {
+          "successes": 4,
+          "rejected_by_cap": 4,
+          "running_items": 4
+        },
+        {
+          "successes": 4,
+          "rejected_by_cap": 4,
+          "running_items": 4
+        },
+        {
+          "successes": 4,
+          "rejected_by_cap": 4,
+          "running_items": 4
+        },
+        {
+          "successes": 4,
+          "rejected_by_cap": 4,
+          "running_items": 4
+        },
+        {
+          "successes": 4,
+          "rejected_by_cap": 4,
+          "running_items": 4
+        },
+        {
+          "successes": 4,
+          "rejected_by_cap": 4,
+          "running_items": 4
+        },
+        {
+          "successes": 4,
+          "rejected_by_cap": 4,
+          "running_items": 4
+        }
+      ]
+    },
+    {
+      "name": "crash windows around report/state writes",
+      "pass": true,
+      "trials": [
+        {
+          "mode": "before_report_replace",
+          "process_rc": 71,
+          "state_phase": "reporting",
+          "state_revision": 9,
+          "state_unchanged": true,
+          "report_exists": false,
+          "report_claims_completed": false,
+          "report_matches_state": false,
+          "recovery": {
+            "ok": true,
+            "phase_after": "completed",
+            "revision_after": 10,
+            "report_matches_state": true
+          }
+        },
+        {
+          "mode": "after_report_replace",
+          "process_rc": 72,
+          "state_phase": "reporting",
+          "state_revision": 9,
+          "state_unchanged": true,
+          "report_exists": true,
+          "report_claims_completed": true,
+          "report_matches_state": false,
+          "recovery": {
+            "ok": true,
+            "phase_after": "completed",
+            "revision_after": 10,
+            "report_matches_state": true
+          }
+        },
+        {
+          "mode": "before_state_replace",
+          "process_rc": 71,
+          "state_phase": "reporting",
+          "state_revision": 9,
+          "state_unchanged": true,
+          "report_exists": true,
+          "report_claims_completed": true,
+          "report_matches_state": false,
+          "recovery": {
+            "ok": true,
+            "phase_after": "completed",
+            "revision_after": 10,
+            "report_matches_state": true
+          }
+        },
+        {
+          "mode": "after_state_replace",
+          "process_rc": 73,
+          "state_phase": "completed",
+          "state_revision": 10,
+          "state_unchanged": false,
+          "report_exists": true,
+          "report_claims_completed": true,
+          "report_matches_state": true,
+          "recovery": null
+        }
+      ],
+      "false_authoritative_completion": false,
+      "known_report_ahead_window": true,
+      "expected_exits": true,
+      "pre_state_unchanged": true,
+      "all_reporting_recoverable": true,
+      "completed_after_state_replace": true
+    },
+    {
+      "name": "report write failure does not complete state",
+      "pass": true,
+      "cli_rc": 1,
+      "stderr": "task-state: [Errno 21] Is a directory: '/private/var/folders/n1/lqgp64vj5rb703jk5c2_qw900000gn/T/orchestrator-reliability-nbuqjtoh/report-write-failure/nimbalyst-local/tasks/TASK-0001/.write-j2s2ye7h' -> '/private/var/folders/n1/lqgp64vj5rb703jk5c2_qw900000gn/T/orchestrator-reliability-nbuqjtoh/report-write-failure/nimbalyst-local/tasks/TASK-0001/report.md'",
+      "revision_before": 9,
+      "revision_after": 9,
+      "phase_after": "reporting"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "total": 6
+  },
+  "limitations": [
+    "Does not prove power-loss durability or fsync directory semantics.",
+    "Does not call real models, browsers, or external services.",
+    "Synthetic HIL references are test-only and not user authentication."
+  ]
+}

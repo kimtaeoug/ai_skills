@@ -1,0 +1,12 @@
+
+import json
+import unittest
+class AverageChecks(unittest.TestCase):
+    def test_positive(self): self.assertEqual(average([2, 4, 6]), 4)
+    def test_empty(self): self.assertIsNone(average([]))
+    def test_negative(self): self.assertEqual(average([-4, -2]), -3)
+    def test_single(self): self.assertEqual(average([7]), 7)
+result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(AverageChecks))
+failed = len(result.failures) + len(result.errors)
+print(json.dumps(dict(passed=result.testsRun-failed, failed=failed, fatal_errors=0, exit_code=int(not result.wasSuccessful()))))
+raise SystemExit(not result.wasSuccessful())
