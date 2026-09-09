@@ -38,6 +38,9 @@ vectors. `init` alone builds no knowledge. The skill's .venv supplies vector
 dependencies. REPO_KNOWLEDGE_DSN selects the DB (default: dbname=repo_knowledge).
 Query defaults to hybrid retrieval when indexed; fallback to lexical is reported.
 The first `index` downloads the local multilingual model; queries use its cache.
+When local Ollama is available, `extract <path>` proposes structured records with
+`qwen2.5-coder:7b` (override with REPO_KNOWLEDGE_OLLAMA_MODEL). It stores nothing:
+review every claim and cited line before passing accepted records to `put`.
 
 If the skill or Python is unavailable, search the JSON as a navigation aid and
 read the actual source. Do not trust stored summaries without checking the source.
@@ -325,6 +328,22 @@ def execute(args, root):
         return {"path": args.path, "start": args.start, "end": end, "sha256": digest,
                 "text": "\n".join(text.splitlines()[args.start-1:end])}
     data = load(root)
+    if args.command == "extract":
+        if args.path not in sources:
+            raise ValueError("Source is excluded, missing or ignored: " + args.path)
+        text, digest = sources[args.path]
+        end = args.end if args.end is not None else len(text.splitlines())
+        if args.start < 1 or end < args.start or end > len(text.splitlines()):
+            raise ValueError("Source line range out of bounds")
+        import ollama_extract
+        records, model, version = ollama_extract.extract(
+            args.path, text, digest, args.start, end, data["ontology"], data["records"], args.max_records)
+        for record in records:
+            validate_record(record, data["ontology"])
+        if len({record["id"] for record in records}) != len(records):
+            raise ValueError("Ollama returned duplicate record IDs")
+        return {"records": records, "stored": False, "model": model, "ollama_version": version,
+                "next": "Review every claim and cited lines, then pass only accepted records to put."}
     if args.command == "query":
         return query(data, sources, excluded, args.text, args.limit, root, args.mode)
     if args.command == "index":
@@ -375,6 +394,11 @@ def main():
     source.add_argument("path")
     source.add_argument("--start", type=int, default=1)
     source.add_argument("--end", type=int)
+    extract = commands.add_parser("extract")
+    extract.add_argument("path")
+    extract.add_argument("--start", type=int, default=1)
+    extract.add_argument("--end", type=int)
+    extract.add_argument("--max-records", type=int, default=8)
     search = commands.add_parser("query")
     search.add_argument("text")
     search.add_argument("--limit", type=int, default=8)

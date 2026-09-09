@@ -86,6 +86,10 @@ PostgreSQL의 `repo_knowledge` 스키마와 `vector(384)` 행은 파생 인덱�
 스킬 제작과 특정 레포의 지식 구축은 별개다. `init`만 실행하면 사실은 0개다.
 
 - **구축:** 에이전트가 실제 소스를 읽고 도메인 개념·타입 관계·출처를 추출한다.
+  로컬 Ollama가 있으면 `extract <path>`로 `qwen2.5-coder:7b`의 구조화된 초안을
+  만들 수 있다. 이 명령은 저장하지 않으며, 에이전트가 주장과 인용 줄을 원문과
+  대조한 뒤 승인한 레코드만 `put`한다. 다른 설치 모델은
+  `REPO_KNOWLEDGE_OLLAMA_MODEL`로 지정한다.
 - **검색:** 기본 `query --mode auto`는 PostgreSQL 인덱스가 가능하면 hybrid,
   아니면 lexical fallback을 명시한다. `lexical`, `vector`, `hybrid` 모드를
   직접 지정할 수 있고, 명시적 vector/hybrid는 인덱스가 없으면 실패한다.
@@ -105,11 +109,19 @@ PostgreSQL의 `repo_knowledge` 스키마와 `vector(384)` 행은 파생 인덱�
 레코드 fingerprint를 확인한다. 검색은 exact cosine이며 HNSW는 아직 없다.
 semantic similarity는 조사 단서이지 증명이나 확정 threshold가 아니다.
 
+Ollama 추출은 `127.0.0.1:11434`의 로컬 API만 호출한다. 설치된 모델이 없으면
+`ollama pull qwen2.5-coder:7b`를 한 번 실행한다. JSON Schema와 온톨로지 검증은
+형식을 보장할 뿐 내용의 진실성을 보장하지 않으므로 검토 전 자동 저장하지 않는다.
+CLI의 `workspace-write` 샌드박스가 localhost를 차단하면 명시적인 오류를 반환한다.
+해당 명령에 네트워크를 허용하거나 샌드박스 밖에서 `extract`를 실행한 뒤 같은
+검토 절차를 따른다.
+
 ## 검증
 
 ```bash
 python3 tests/test-repo-knowledge.py
 .claude/skills/repo-knowledge/.venv/bin/python tests/test-repo-knowledge-vectors.py
+python3 tests/test-repo-knowledge-ollama.py
 ```
 
 임시 Git 레포에서 구축·조회·관계 확장·갱신·삭제·미커밋 변경·새 파일·잘못된 입력·

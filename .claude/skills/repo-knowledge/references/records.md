@@ -4,6 +4,7 @@ The portable folder can be copied to either runtime's skill directory without
 rewriting instructions. `knowledge.py --help` lists commands. Pass `--repo` before
 the command. `source` and `query` never write; `init`, `put`, `refresh`, `drop` do.
 `index` writes only the derived PostgreSQL vector index.
+`extract <path>` calls local Ollama and returns draft records without storing them.
 
 ## Storage and ontology
 
@@ -85,6 +86,18 @@ writer lock and atomic replacement. A crash can leave `.write-lock`; inspect the
 owning activity before removing that lock. Do not run concurrent direct JSON edits.
 Run `index` after `put`, `refresh` or `drop` to transactionally rebuild this
 repository's derived vectors from the current fresh records.
+
+For a first draft, run `extract payment.py --max-records 4`. It sends the selected
+numbered source range to local Ollama at `127.0.0.1:11434`, using
+`qwen2.5-coder:7b` unless `REPO_KNOWLEDGE_OLLAMA_MODEL` names another installed
+generation model. The response uses a JSON Schema derived from the current
+ontology, then the helper validates endpoint types, line bounds and record shape.
+These checks cannot prove a summary is true. Read every cited line, remove invented
+effects or missing prerequisites, and save only accepted `records` as the JSON array
+given to `put`. Source edits during extraction cause `put` to reject the old hash.
+Some CLI `workspace-write` sandboxes block localhost. In that case the helper
+returns an explicit sandbox error; allow localhost for the command or run
+`extract` outside that sandbox, then continue the same review-before-`put` flow.
 
 Every record has a nonempty ID/summary, typed subject/object, valid relation,
 `observed` or `inferred` epistemic label, and one or more evidence entries.

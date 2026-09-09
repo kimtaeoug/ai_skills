@@ -124,3 +124,29 @@ python3 tests/test-repo-knowledge.py
 Claude/Codex 에이전트의 전체 업무 세션을 다시 실행한 것은 아니며, 이번 검사는
 공용 helper와 전역 경로에 대한 실제 DB 통합 검사다. 대규모 성능 측정과 HNSW는
 포함하지 않았다. 테스트 레포의 DB 행은 종료 시 제거했다.
+
+## 후속 변경: Ollama 구조화 추출
+
+Homebrew Ollama CLI를 0.24.0에서 0.33.3으로 업데이트해 실행 중인 서버
+0.33.3과 맞췄다. 설치되어 있던 `qwen2.5-coder:7b`를 기본 모델로 연결하고,
+단일 소스 파일에서 온톨로지 레코드 초안을 만드는 `extract` 명령을 추가했다.
+이 명령은 `127.0.0.1:11434`만 호출하고 JSON이나 PostgreSQL에 쓰지 않는다.
+
+```bash
+python3 tests/test-repo-knowledge-ollama.py
+```
+
+실제 모델로 Python의 로그인 재시도 상수와 함수를 구조화 레코드로 추출했다.
+리터럴 값 보존, 근거 경로·해시·줄 범위, 현재 온톨로지 endpoint 검증,
+검토 전 레코드 수 0, 승인 레코드 `put` 후 lexical 검색을 확인했다. 첫 시도에서
+모델이 값 `5`를 rationale에만 남기고 summary에서 빠뜨려, 프롬프트에 리터럴 값
+보존과 명시되지 않은 효과 금지를 추가했다. 생성 내용은 실행마다 달라질 수 있어 구조 검증은
+내용의 진실성을 증명하지 않으므로, 스킬은 에이전트가 인용 줄을 검토한 레코드만
+`put`하도록 유지한다.
+
+Claude Code와 Codex CLI의 전역 스킬 실제 사용도 각각 통과했다. 둘 다 초안을 인용
+줄과 대조한 뒤 2개 레코드만 저장했고, lexical 검색과 원본 파일 불변을 확인했다.
+Codex의 첫 실행에서 Python 소스를 `document`로 분류한 사례가 있어 코드 경로는
+`module`/`symbol` subject만 사용하도록 프롬프트와 회귀 검사를 보강했다. Codex의
+기본 `workspace-write` 샌드박스는 localhost를 차단하므로, 이 명령은 localhost가
+허용된 실행 환경이나 샌드박스 밖에서 실행해야 한다.
