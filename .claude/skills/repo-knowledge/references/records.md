@@ -3,6 +3,7 @@
 The portable folder can be copied to either runtime's skill directory without
 rewriting instructions. `knowledge.py --help` lists commands. Pass `--repo` before
 the command. `source` and `query` never write; `init`, `put`, `refresh`, `drop` do.
+`sync-plan` is read-only; `sync-apply` writes the reviewed JSON batch atomically.
 `index` writes only the derived PostgreSQL vector index.
 `extract <path>` calls local Ollama and returns draft records without storing them.
 
@@ -84,8 +85,12 @@ that record, never the entire store. Duplicate IDs in one batch are rejected.
 All records in a batch are validated before saving. Updates use an exclusive
 writer lock and atomic replacement. A crash can leave `.write-lock`; inspect the
 owning activity before removing that lock. Do not run concurrent direct JSON edits.
-Run `index` after `put`, `refresh` or `drop` to transactionally rebuild this
-repository's derived vectors from the current fresh records.
+Run `index` after approved changes to transactionally update this repository's
+derived vectors. Unchanged fingerprints reuse their embeddings; deletion-only and
+no-op updates do not instantiate the model. `index --rebuild` or a model signature
+change regenerates all fresh embeddings. `indexed` is the final fresh total;
+`embedded`, `deleted`, `unchanged`, `rebuilt` describe this update. On failure the
+old DB transaction is preserved; retry indexing without reverting newer JSON.
 
 For a first draft, run `extract payment.py --max-records 4`. It sends the selected
 numbered source range to local Ollama at `127.0.0.1:11434`, using
@@ -105,6 +110,77 @@ Every record has a nonempty ID/summary, typed subject/object, valid relation,
 `observed` means the stated relationship is directly supported, not that the code
 was executed. Preserve documentation/implementation conflicts as separate claims.
 Do not persist a passing-test claim solely from the test's source text.
+
+## Incremental sync
+
+`sync-plan` compares current content with optional `sync.reviewed_files` in the
+version-1 JSON store. Missing metadata is an empty ledger, not an automatic migration
+or full-review claim. `put/drop/refresh` preserve the ledger without advancing it.
+The inventory still hashes all eligible files; only review/extraction and embedding
+work is incremental.
+
+```sh
+python3 <helper> --repo <target> sync-plan --path payment.py
+```
+
+Omit `--path` for all pending paths; repeat it for selected exact relative file paths.
+The plan returns `base_token`, `selected_paths`, `changes`, `direct_ids`, `related_ids`,
+`rename_hints`, `excluded_paths`, `remaining_paths`, and `stored:false`.
+Kinds are `unreviewed`, `modified`, `missing`, `unavailable`, or explicitly requested
+unchanged `review`. Missing is not necessarily a Git deletion. Excluded/symlinked
+sources must not be extracted. Unique same-content rename hints are advisory only.
+
+Direct records cite selected paths; related records share a typed `(type,id)` endpoint
+with a direct record, exactly one hop. Every listed ID needs a decision, including
+unchanged tests/docs. If an unresolved relation blocks the batch, resolve it or make
+a new smaller plan; never omit a required decision to force completion.
+
+For `payment.py` containing the two-line function in the example above, a complete
+batch using its already stored and still valid record has this shape. Substitute
+the actual token and source hash; the capitalized markers are not valid values.
+
+```json
+{
+  "version": 1,
+  "base_token": "TOKEN_FROM_PLAN",
+  "selected_paths": ["payment.py"],
+  "files": [{
+    "path": "payment.py",
+    "sha256": "SHA256_FROM_SOURCE",
+    "review_reason": "Read both lines; the function still returns paid."
+  }],
+  "decisions": [{
+    "id": "payment-charge",
+    "action": "keep",
+    "review_reason": "The current implementation still supports this inferred record."
+  }],
+  "records": []
+}
+```
+
+If more direct/related IDs exist, the actual batch must decide all of them. Save
+the batch under `.repo-knowledge/review.json` or outside the repo, then run:
+
+```sh
+python3 <helper> --repo <target> sync-apply .repo-knowledge/review.json
+python3 <helper> --repo <target> index
+```
+
+- `files` covers exactly selected paths, each with a nonempty review reason and
+  current hash (null if currently missing/excluded). This asserts full-file review.
+- `decisions` covers exactly all direct/related IDs, each with a nonempty reason.
+  `keep` requires fresh evidence; `drop` removes the ID; `replace` requires exactly
+  one complete replacement of the same ID in `records` using the existing put format.
+- New IDs in `records` must cite a selected path. Unrelated existing IDs cannot be
+  overwritten. All new/replaced records must have valid ontology endpoints and
+  current evidence. Empty records are valid for a no-fact file review or deletion.
+- A token mismatch rejects the whole batch without changing JSON. Creating internal
+  plan/review artifacts is not a source change. Concurrent external source/JSON
+  edits require replanning; source freshness remains checked again during queries.
+- No model or database is called by sync-plan/apply. Review reasons document agent
+  judgment; validation does not prove the reason or summary is true.
+- Apply acknowledges only selected paths. Remaining paths stay pending. A ledger
+  entry does not imply every possible domain fact has been captured.
 
 ## Freshness, retrieval, scope
 
@@ -150,6 +226,9 @@ Nested overrides, runtime instruction limits, or disabled project instructions
 can suppress consultation. Inspect the active instructions in the target scope.
 Bindings guide the agent; they do not enforce actions with hooks. Reopen the
 session when needed to load newly installed skills/project instructions.
+`init --update-guide` explicitly upgrades an existing guide with an exclusive
+`guide.md.bak` backup. An existing backup blocks the operation; preserve/review it
+before another upgrade. Plain `init` preserves customized guides.
 
 ## Optional vector setup
 

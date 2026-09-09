@@ -25,7 +25,7 @@ it; explicitly running that venv's Python also works for copied installations.
 | --- | --- |
 | Build / bootstrap | `init`, inspect source, optionally `extract <path>`, review, `put`, verify queries |
 | Consult / ordinary work | `status`, `query '<keywords>'`, read cited current source |
-| Refresh after changes | `refresh`, re-extract affected facts, `put`; `drop <id>` for obsolete claims |
+| Sync after changes | `sync-plan --path <file>`, review affected records, `sync-apply <batch>`, `index` |
 
 ## Build
 
@@ -57,14 +57,16 @@ it; explicitly running that venv's Python also works for copied installations.
    contradictions. Report actual coverage; do not assert retrieval improves over
    `rg` without comparing results. Setup is complete only after supported records,
    working retrieval and both instruction bindings exist for the declared scope.
-6. For semantic retrieval, run `index` after `put`, `refresh` or `drop`. The
-   index transactionally rebuilds only this repository's derived rows from fresh
-   records. The repository namespace is SHA-256 of the resolved absolute Git
+6. For semantic retrieval, run `index` after approved changes. It transactionally
+   deletes obsolete rows and embeds only changed records; `index --rebuild` forces
+   a full rebuild. The repository namespace is SHA-256 of the resolved absolute Git
    root, so different checkouts do not collide.
 
 ## Consult during repository work
 
-Run `status`, then query task terms/aliases. `query` defaults to `--mode auto`:
+Run `status` and read-only `sync-plan`, then query task terms/aliases. Pending paths
+are maintenance gaps; ordinary read-only questions do not authorize extraction or
+storage updates. `query` defaults to `--mode auto`:
 hybrid lexical plus pgvector retrieval when the PostgreSQL index is accessible,
 otherwise a visibly reported lexical fallback. Use `--mode lexical` to avoid the
 database. Explicit `--mode vector` or `--mode hybrid` fails if PostgreSQL,
@@ -81,13 +83,33 @@ and tests, record the conflict, and distinguish intended rules from actual behav
 
 ## Maintain after work
 
-After implementation and relevant checks, run `refresh`: it removes stale records
-and returns IDs/paths to re-read, **not regenerated knowledge**. Re-extract changed
-facts with `source` and `put`; remove obsolete but still hash-fresh claims with
-`drop`. Run `index` afterward to refresh derived vectors. Review neighboring
-concepts/tests/docs for semantic impact, including unchanged documents. Keep
-stable IDs; renames require updating IDs and all affected relations. Review new
-files within scope. Report unresolved update/coverage gaps.
+After authorized implementation and relevant checks, run `sync-plan --path <file>`
+for the affected files (repeat `--path` for multiple files). Read
+[sync batch contract](references/records.md#incremental-sync) before composing a batch.
+Review each selected file and every direct/related record. Use `source` and optional
+`extract` for drafts; give every affected ID a `replace`, `drop` or `keep` decision
+with a source-backed reason. Stale records cannot be kept. Related records include
+one-hop typed entity neighbors, not an exhaustive dependency graph.
+
+Apply the reviewed batch with `sync-apply <batch>`, then `index` and a representative
+query. Store batches under `.repo-knowledge/` or outside the target repository.
+If source or JSON changed since planning, re-plan and review the new state. Do not
+call `refresh` before this workflow: it removes the old relations needed for review.
+`refresh` remains an explicit manual stale-record removal command; it does not
+regenerate facts. Legacy `put/drop` remain available for individual record updates.
+
+The ledger records only files fully reviewed, including files with no useful facts.
+Skip unchanged reviewed files; report `remaining_paths` when only part was reviewed.
+Renames are deletion/addition with optional unique-content hints; recheck IDs and
+relations rather than automatically rewriting them. Semantic conflicts in unchanged
+docs still need source review. If JSON succeeds but indexing fails, retain JSON and
+retry `index`; stale vectors are filtered, and missing fresh vectors are reported.
+
+To upgrade an existing repository guide explicitly, run `init --update-guide`.
+It backs up an existing guide to `guide.md.bak` and refuses to overwrite a backup.
+Default `init` preserves an existing guide; global installation does not update all
+repositories' guides. A changed evaluation gold hash needs independent re-annotation
+and a new benchmark version, never an automatic hash/answer replacement.
 
 ## Evidence and operating boundaries
 

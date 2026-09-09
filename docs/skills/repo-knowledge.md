@@ -94,9 +94,26 @@ PostgreSQL의 `repo_knowledge` 스키마와 `vector(384)` 행은 파생 인덱�
   아니면 lexical fallback을 명시한다. `lexical`, `vector`, `hybrid` 모드를
   직접 지정할 수 있고, 명시적 vector/hybrid는 인덱스가 없으면 실패한다.
   에이전트가 현재 코드와 대조해 인용이 있는 답변/작업 계획을 만든다.
-- **갱신:** 파일 해시가 달라졌거나 삭제된 근거를 제외하고 다시 읽어 저장한다.
-  커밋 전 변경, 새 파일, 이름 변경도 고려한다. `put`, `refresh`, `drop` 뒤에는
-  `index`로 파생 벡터를 다시 만든다.
+- **갱신:** `sync-plan --path <파일>`로 변경과 연결된 레코드를 확인하고,
+  에이전트가 각 파일과 영향 레코드를 검토한 배치를 `sync-apply`로 한 번에 반영한다.
+  `index`는 변경 레코드만 임베딩하고 삭제된 행을 제거한다. 동일 상태에서는
+  임베딩을 호출하지 않는다. 전체 재생성은 `index --rebuild`를 사용한다.
+
+업무 시작에는 `status → sync-plan → query`, 승인된 코드 작업 종료에는
+`sync-plan → 검토 → sync-apply → index` 순서다. 읽기 전용 질문은 자동 갱신하지 않는다.
+배치 작성 전에 `references/records.md`의 Incremental sync 계약을 읽는다.
+`refresh`를 먼저 실행하면 검토할 옛 관계가 사라지므로 새 갱신 흐름에서는 사용하지 않는다.
+기존 수동 `put/drop/refresh`는 계속 사용할 수 있다.
+
+파일 내용이 같고 검토가 끝난 파일은 다시 추출하지 않는다. 파일에서 지식을 0개
+추출했어도 전체 검토 이력을 남길 수 있다. 이름 변경은 삭제+추가로 검토하며,
+내용이 같은 유일한 쌍에만 힌트를 제공한다. 선택하지 않은 경로는 pending으로 남는다.
+소스나 JSON이 계획 이후 바뀌면 전체 배치를 거부한다. JSON 반영 후 DB 실패 시에는
+JSON을 되돌리지 않고 `index`만 재시도한다. 오래된 벡터는 검색에서 제외된다.
+
+기존 레포의 절차 문서는 `init --update-guide`로 명시 갱신한다. 기존 guide를
+`guide.md.bak`에 백업하며 같은 백업을 덮어쓰지 않는다. 전역 스킬 업데이트가
+모든 레포 guide를 자동 수정하지는 않는다.
 
 관찰과 추론을 구분하고, 추론에는 이유를 남긴다. 문서가 그대로여도 코드 변경으로
 의미가 틀려질 수 있으므로 관련 관계는 에이전트가 다시 확인한다. 미인덱싱 파일과
@@ -120,6 +137,7 @@ CLI의 `workspace-write` 샌드박스가 localhost를 차단하면 명시적인 
 
 ```bash
 python3 tests/test-repo-knowledge.py
+python3 tests/test-repo-knowledge-sync.py
 .claude/skills/repo-knowledge/.venv/bin/python tests/test-repo-knowledge-vectors.py
 python3 tests/test-repo-knowledge-ollama.py
 ```

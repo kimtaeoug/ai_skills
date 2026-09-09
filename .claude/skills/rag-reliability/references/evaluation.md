@@ -15,6 +15,10 @@ Gold must be independently source-verified, not copied from generated summaries.
 An unchecked or mismatching hash is a gold-validity gap, not a retrieval miss.
 Keep those cases and report invalid counts; do not publish a validated aggregate
 over the full suite until repaired. Provisional arithmetic may be shown as such.
+Repository sync does not approve evaluation gold. Missing, renamed or changed gold
+sources require independent re-annotation and a new benchmark version. Never update
+hashes just to make old expected answers pass. Keep invalid case IDs visible and
+preserve the original frozen benchmark; compare modes only on the same valid version.
 
 ## Retrieval metrics
 

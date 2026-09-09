@@ -26,6 +26,10 @@ Freeze cases, k, scope, thresholds and runtime/model settings before comparing m
 Preserve a held-out set when tuning; changes to cases create a new benchmark version.
 Verify gold hashes first: changed or unchecked gold makes affected scores provisional,
 not validated. Re-annotate from source without silently dropping difficult cases.
+After repository sync, check gold paths and hashes again, including deleted/renamed
+paths. Do not automatically replace an old gold hash or expected answer. Preserve
+the old benchmark, independently re-annotate affected cases, and create a new version;
+scores across changed benchmarks are not a controlled before/after comparison.
 
 ## Run and judge
 
