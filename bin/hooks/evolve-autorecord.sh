@@ -24,6 +24,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EVOLVE="$SCRIPT_DIR/../evolve"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 [ -x "$EVOLVE" ] || { echo '{}'; exit 0; }
 command -v jq >/dev/null 2>&1 || { echo '{}'; exit 0; }
 
@@ -51,7 +52,7 @@ reason="다음 스킬(들)이 baseline 대비 변경됨: ${skill_list}
 
 각 스킬에 대해 evolution record를 작성하라. 사람에게 아무것도 묻지 마라 (AskUserQuestion을 쓰지 마라) — 이 세션의 대화 내용에서 무엇을, 왜 바꿨는지 직접 추론해서 채워라. context/evidence를 세션에서 합리적으로 추론할 수 없으면 \"세션 로그 기반 자동 추론 실패 — 검토 필요\"라고 쓰고 넘어가라.
 
-각 스킬마다 /Users/deratio/skills/evolution/records/<스킬명>/<YYYY-MM-DD>-<slug>.md 에 아래 스키마로 저장:
+각 스킬마다 ${REPO_ROOT}/evolution/records/<스킬명>/<YYYY-MM-DD>-<slug>.md 에 아래 스키마로 저장:
 
 skill: <스킬 이름>
 source: auto (session-end hook)
@@ -63,7 +64,7 @@ evidence: <있으면>
 candidate_lessons: <있으면>
 promotion: pending
 
-record 작성 후 각 스킬에 대해 반드시 실행: /Users/deratio/skills/bin/evolve snapshot ~/.agents/skills/<스킬명>
+record 작성 후 각 스킬에 대해 반드시 실행: ${REPO_ROOT}/bin/evolve snapshot ~/.agents/skills/<스킬명>
 (이걸 안 하면 다음 종료 시도에서 같은 델타가 또 감지된다.)
 
 다 끝나면 정상적으로 응답을 마쳐라."

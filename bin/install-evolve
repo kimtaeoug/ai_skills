@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SKILL_SOURCE="$REPO_ROOT/.agents/skills/evolve"
+INSTALL_HOME="${EVOLVE_INSTALL_HOME:-$HOME}"
+SETTINGS="$INSTALL_HOME/.claude/settings.json"
+
+command -v python3 >/dev/null 2>&1 || { echo "install-evolve: python3 is required" >&2; exit 1; }
+[ -f "$SKILL_SOURCE/SKILL.md" ] || { echo "install-evolve: missing $SKILL_SOURCE/SKILL.md" >&2; exit 1; }
+
+install_link() {
+  local destination="$1"
+  mkdir -p "$(dirname "$destination")"
+  if [ -e "$destination" ] && [ ! -L "$destination" ]; then
+    echo "install-evolve: refusing to replace existing $destination" >&2
+    exit 1
+  fi
+  ln -sfn "$SKILL_SOURCE" "$destination"
+}
+
+install_link "$INSTALL_HOME/.agents/skills/evolve"
+install_link "$INSTALL_HOME/.claude/skills/evolve"
+install_link "$INSTALL_HOME/.codex/skills/evolve"
+
+mkdir -p "$(dirname "$SETTINGS")"
+[ -f "$SETTINGS" ] || printf '{}\n' > "$SETTINGS"
+
+TRACK_HOOK="$REPO_ROOT/bin/hooks/evolve-track.sh"
+STOP_HOOK="$REPO_ROOT/bin/hooks/evolve-autorecord.sh"
+TMP_SETTINGS="$(mktemp "${SETTINGS}.tmp.XXXXXX")"
+trap 'rm -f "$TMP_SETTINGS"' EXIT
+
+python3 - "$SETTINGS" "$TMP_SETTINGS" "$TRACK_HOOK" "$STOP_HOOK" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+settings_path, tmp_path, track_hook, stop_hook = map(Path, sys.argv[1:5])
+
+try:
+    data = json.loads(settings_path.read_text())
+except json.JSONDecodeError as exc:
+    raise SystemExit(f"install-evolve: invalid JSON in {settings_path}: {exc}")
+
+if not isinstance(data, dict):
+    raise SystemExit(f"install-evolve: expected object JSON in {settings_path}")
+
+hooks = data.setdefault("hooks", {})
+if not isinstance(hooks, dict):
+    raise SystemExit(f"install-evolve: expected hooks object in {settings_path}")
+
+def ensure(event, command, entry):
+    items = hooks.setdefault(event, [])
+    if not isinstance(items, list):
+        raise SystemExit(f"install-evolve: expected hooks.{event} array in {settings_path}")
+    for item in items:
+        for hook in item.get("hooks", []) if isinstance(item, dict) else []:
+            if isinstance(hook, dict) and hook.get("command") == str(command):
+                return
+    items.append(entry)
+
+ensure("PostToolUse", track_hook, {"matcher": "Skill", "hooks": [{"type": "command", "command": str(track_hook)}]})
+ensure("Stop", stop_hook, {"hooks": [{"type": "command", "command": str(stop_hook)}]})
+tmp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+PY
+mv "$TMP_SETTINGS" "$SETTINGS"
+trap - EXIT
+
+echo "evolve installed for Claude and Codex"
