@@ -56,7 +56,7 @@ def record_text(record):
                      record["object"]["id"], *record.get("aliases", [])])
 
 
-def build(root, fresh):
+def build(root, fresh, rebuild=False):
     with connect() as connection:
         connection.execute("CREATE EXTENSION IF NOT EXISTS vector")
         connection.execute("CREATE SCHEMA IF NOT EXISTS repo_knowledge")
@@ -69,21 +69,35 @@ def build(root, fresh):
         key = namespace(root)
         connection.execute("SELECT pg_advisory_xact_lock(%s)",
                            (int.from_bytes(bytes.fromhex(key[:16]), "big", signed=True),))
-        connection.execute("DELETE FROM repo_knowledge.indexes WHERE repo = %s", (key,))
-        connection.execute("INSERT INTO repo_knowledge.indexes VALUES (%s, %s)", (key, SIGNATURE))
-        # ponytail: full rebuild and exact search; add incremental/HNSW only after measuring corpus latency.
-        if fresh:
+        row = connection.execute("SELECT signature FROM repo_knowledge.indexes WHERE repo = %s",
+                                 (key,)).fetchone()
+        rebuilt = rebuild or row is None or row[0] != SIGNATURE
+        existing = dict(connection.execute(
+            "SELECT id, fingerprint FROM repo_knowledge.embeddings WHERE repo = %s", (key,)).fetchall())
+        current = {record_id: fingerprint(record) for record_id, record in fresh.items()}
+        removed = sorted(set(existing) - set(current))
+        changed = sorted(k for k in current if rebuilt or existing.get(k) != current[k])
+        unchanged = sorted(set(current) - set(changed))
+
+        connection.execute("""INSERT INTO repo_knowledge.indexes VALUES (%s, %s)
+            ON CONFLICT (repo) DO UPDATE SET signature = EXCLUDED.signature""", (key, SIGNATURE))
+        if removed:
+            connection.execute("DELETE FROM repo_knowledge.embeddings WHERE repo = %s AND id = ANY(%s)",
+                               (key, removed))
+        if changed:
             model = embedder(download=True)
-            keys = sorted(fresh)
-            count = 0
-            for record_id, vector in zip(keys, model.passage_embed([record_text(fresh[k]) for k in keys])):
-                connection.execute("INSERT INTO repo_knowledge.embeddings VALUES (%s, %s, %s, %s::vector)",
-                                   (key, record_id, fingerprint(fresh[record_id]), json.dumps(vector.tolist())))
-                count += 1
-            if count != len(keys):
+            embeddings = list(model.passage_embed([record_text(fresh[k]) for k in changed]))
+            if len(embeddings) != len(changed):
                 raise ValueError("Embedding count mismatch; previous index preserved.")
+            for record_id, vector in zip(changed, embeddings):
+                connection.execute("""INSERT INTO repo_knowledge.embeddings (repo,id,fingerprint,embedding)
+                    VALUES (%s,%s,%s,%s::vector)
+                    ON CONFLICT (repo,id) DO UPDATE
+                    SET fingerprint=EXCLUDED.fingerprint, embedding=EXCLUDED.embedding""",
+                                   (key, record_id, current[record_id], json.dumps(vector.tolist())))
     return {"indexed": len(fresh), "backend": "postgresql/pgvector", "model": MODEL,
-            "namespace": namespace(root)}
+            "namespace": namespace(root), "embedded": len(changed), "deleted": len(removed),
+            "unchanged": len(unchanged), "rebuilt": rebuilt}
 
 
 def search(root, fresh, text, limit):

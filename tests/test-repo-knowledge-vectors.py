@@ -67,16 +67,42 @@ def main():
         run("query", question, "--mode", "vector", ok=False)
         built = run("index")
         assert built["indexed"] == 3
+        assert built["embedded"] == 3
+        assert built["deleted"] == 0
+        assert built["unchanged"] == 0
+        assert built["rebuilt"] is True
         assert built["backend"] == "postgresql/pgvector"
         def snapshot():
             with psycopg.connect(os.environ.get("REPO_KNOWLEDGE_DSN", "dbname=repo_knowledge")) as connection:
+                signature = connection.execute(
+                    "SELECT signature FROM repo_knowledge.indexes WHERE repo = %s",
+                    (built["namespace"],)).fetchone()[0]
                 rows = connection.execute(
                     "SELECT id, fingerprint, embedding::text FROM repo_knowledge.embeddings WHERE repo = %s ORDER BY id",
                     (built["namespace"],)).fetchall()
                 assert connection.execute("SELECT extversion FROM pg_extension WHERE extname='vector'").fetchone()
-                return rows
+                return signature, rows
         before = snapshot()
-        assert len(json.loads(before[0][2])) == 384
+        assert len(json.loads(before[1][0][2])) == 384
+        second = run("index")
+        assert second["indexed"] == 3
+        assert second["embedded"] == 0
+        assert second["deleted"] == 0
+        assert second["unchanged"] == 3
+        assert second["rebuilt"] is False
+        fresh_records = json.loads((root / ".repo-knowledge/knowledge.json").read_text())["records"]
+        with patch.object(vectors, "embedder", side_effect=AssertionError("Unexpected embedder")):
+            assert vectors.build(root, fresh_records)["embedded"] == 0
+        with psycopg.connect(os.environ.get("REPO_KNOWLEDGE_DSN", "dbname=repo_knowledge")) as connection:
+            connection.execute("UPDATE repo_knowledge.indexes SET signature = 'old' WHERE repo = %s",
+                               (built["namespace"],))
+        rebuilt = run("index")
+        assert rebuilt["indexed"] == 3
+        assert rebuilt["embedded"] == 3
+        assert rebuilt["deleted"] == 0
+        assert rebuilt["unchanged"] == 0
+        assert rebuilt["rebuilt"] is True
+        before = snapshot()
         assert run("query", question, "--mode", "lexical")["results"] == []
         for mode in ("vector", "hybrid", "auto"):
             hits = run("query", question, "--mode", mode, "--limit", "1")
@@ -99,10 +125,22 @@ def main():
 
         with patch.object(vectors, "embedder", return_value=BadModel()):
             try:
-                vectors.build(root, {r["id"]: r for r in records})
+                vectors.build(root, {r["id"]: r for r in records}, rebuild=True)
                 raise AssertionError("Invalid vector dimensions accepted")
             except ValueError:
                 pass
+        assert snapshot() == before
+
+        class ExtraModel:
+            def passage_embed(self, texts):
+                return [BadVector() for _ in range(len(texts) + 1)]
+
+        with patch.object(vectors, "embedder", return_value=ExtraModel()):
+            try:
+                vectors.build(root, {r["id"]: r for r in records}, rebuild=True)
+                raise AssertionError("Extra embeddings accepted")
+            except ValueError as error:
+                assert "count mismatch" in str(error)
         assert snapshot() == before
         # Model inference must work from cache even when HTTP calls are forbidden.
         with patch("httpx.Client.send", side_effect=AssertionError("Unexpected HTTP")), \
@@ -115,13 +153,31 @@ def main():
         records[1]["summary"] += " Reviewed refund policy."
         put([records[1]])
         assert [h["record"]["id"] for h in run("query", question, "--mode", "vector")["results"]] == ["image"]
+        changed = run("index")
+        assert changed["indexed"] == 2
+        assert changed["embedded"] == 1
+        assert changed["deleted"] == 1
+        assert changed["unchanged"] == 1
+        assert changed["rebuilt"] is False
         (root / "image.md").unlink()
-        assert run("query", question, "--mode", "vector")["results"] == []
-        assert run("index")["indexed"] == 1
+        assert [h["record"]["id"] for h in run("query", question, "--mode", "vector")["results"]] == ["refund"]
+        fresh_records = json.loads((root / ".repo-knowledge/knowledge.json").read_text())["records"]
+        with patch.object(vectors, "embedder", side_effect=AssertionError("Unexpected embedder")):
+            deleted = vectors.build(root, {"refund": fresh_records["refund"]})
+        assert deleted["indexed"] == 1
+        assert deleted["embedded"] == 0
+        assert deleted["deleted"] == 1
+        assert deleted["unchanged"] == 1
+        assert deleted["rebuilt"] is False
         assert run("query", "취소한 결제 금액을 돌려받기", "--mode", "vector")["results"][0]["record"]["id"] == "refund"
         run("drop", "refund")
         assert run("query", question, "--mode", "vector")["results"] == []
-        assert run("index")["indexed"] == 0
+        final = run("index")
+        assert final["indexed"] == 0
+        assert final["embedded"] == 0
+        assert final["deleted"] == 1
+        assert final["unchanged"] == 0
+        assert final["rebuilt"] is False
     print("PASS: real Korean/English pgvector, hybrid, read-only/offline query, repo isolation, rollback, stale filtering before limit, replacement, deletion, rebuild")
 
 
