@@ -2,6 +2,14 @@
 
 ## Execution notes
 
+Implementation completed; acceptance evidence and limitations: [verification report](../../reports/2026-09-09-repo-rag-sync-verification.md). Detailed checklist below preserves the original proposed sequence; core Tasks 1–3 were committed together after regression verification rather than as three artificial commits. Pure sync helpers perform preliminary freshness guards; the CLI still runs the existing canonical record/freshness validators before saving.
+
+- [x] Tasks 1–3: reviewed planning, atomic application and lifecycle regression.
+- [x] Task 4: incremental PostgreSQL indexing and actual database rollback tests.
+- [x] Task 5: guide upgrade and shared skill/evaluation instructions.
+- [x] Task 6 validation: actual Claude/Codex/Ollama exercise, independent artifact verification.
+- [x] Task 6 delivery: global aliases verified and synthetic database namespaces cleaned. Git delivery is recorded by repository history.
+
 - Implementation workspace: `.worktrees/rag-sync`, branch `feat/rag-incremental-sync`.
 - Ruling: exclude internal `.repo-knowledge/` operational paths from snapshot excluded-list hashing. Otherwise saving a review file or creating the writer lock would invalidate its own plan. Canonical JSON remains included in the token.
 - Ruling: a byte-identical no-op apply may retain the same content token. The token detects changed source/store state, not request replay; do not add a history service solely to reject an identical no-op.

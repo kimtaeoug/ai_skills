@@ -124,9 +124,11 @@ def make_plan(data, sources, excluded, selected_paths=None):
     related = sorted(record_id for record_id, record in data["records"].items()
                      if record_id not in direct and _entities(record) & direct_entities)
 
-    missing = {path: reviewed.get(path) for path in selected if path not in sources and path not in excluded_set}
+    missing = {path: _before_hash(path, reviewed, evidence_hashes)
+               for path in selected if path not in sources and path not in excluded_set}
     old_by_hash = {}
-    for path, digest in reviewed.items():
+    for path in candidates:
+        digest = _before_hash(path, reviewed, evidence_hashes)
         if path not in sources and digest:
             old_by_hash.setdefault(digest, []).append(path)
     by_hash = {}

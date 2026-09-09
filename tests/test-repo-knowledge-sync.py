@@ -96,6 +96,11 @@ def main():
         original = json.loads(store.read_text(encoding="utf-8"))
         original_test_record = copy.deepcopy(original["records"]["auth-test"])
         before = store.read_bytes()
+        (root / "auth.py").rename(root / "legacy_renamed.py")
+        legacy_rename = run("sync-plan")
+        assert {"from": "auth.py", "to": "legacy_renamed.py",
+                "sha256": auth_record["evidence"][0]["sha256"]} in legacy_rename["rename_hints"]
+        (root / "legacy_renamed.py").rename(root / "auth.py")
         for bad_sync in (None, [], True, {"version": 2, "reviewed_files": {}},
                          {"version": True, "reviewed_files": {}},
                          {"version": 1.0, "reviewed_files": {}},

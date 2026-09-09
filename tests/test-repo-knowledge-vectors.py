@@ -102,6 +102,8 @@ def main():
         assert rebuilt["deleted"] == 0
         assert rebuilt["unchanged"] == 0
         assert rebuilt["rebuilt"] is True
+        forced = run("index", "--rebuild")
+        assert forced["rebuilt"] is True and forced["embedded"] == 3
         before = snapshot()
         assert run("query", question, "--mode", "lexical")["results"] == []
         for mode in ("vector", "hybrid", "auto"):
@@ -152,6 +154,16 @@ def main():
         assert hits["results"][0]["record"]["id"] != "password"
         records[1]["summary"] += " Reviewed refund policy."
         put([records[1]])
+        store = root / ".repo-knowledge/knowledge.json"
+        saved_json, saved_db = store.read_bytes(), snapshot()
+        updated = json.loads(saved_json)["records"]
+        with patch.object(vectors, "embedder", return_value=BadModel()):
+            try:
+                vectors.build(root, {key: updated[key] for key in ("refund", "image")})
+                raise AssertionError("Invalid incremental vector accepted")
+            except ValueError:
+                pass
+        assert store.read_bytes() == saved_json and snapshot() == saved_db
         assert [h["record"]["id"] for h in run("query", question, "--mode", "vector")["results"]] == ["image"]
         changed = run("index")
         assert changed["indexed"] == 2

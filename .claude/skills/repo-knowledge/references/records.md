@@ -179,6 +179,9 @@ python3 <helper> --repo <target> index
   edits require replanning; source freshness remains checked again during queries.
 - No model or database is called by sync-plan/apply. Review reasons document agent
   judgment; validation does not prove the reason or summary is true.
+- A summary claiming a code/document contradiction must cite both current files in
+  its own evidence array. A reference to another record ID does not propagate that
+  record's hashes. Otherwise limit the summary to what its cited file establishes.
 - Apply acknowledges only selected paths. Remaining paths stay pending. A ledger
   entry does not imply every possible domain fact has been captured.
 

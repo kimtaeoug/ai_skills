@@ -11,7 +11,7 @@ typed relations, retrieves evidence and detects changed sources. Canonical
 knowledge remains JSON in `.repo-knowledge/knowledge.json`; PostgreSQL with
 pgvector stores only a derived local `vector(384)` index under schema
 `repo_knowledge`. Requires Git and Python 3.9+ for legacy lexical use; Python
-3.11 is recommended for vector retrieval. No model API, MCP, OMX or
+3.11 is recommended for vector retrieval. No hosted-model API, MCP, OMX or
 runtime-specific hooks.
 
 Resolve this skill's actual directory from the loaded `SKILL.md`; the helper is
@@ -90,6 +90,9 @@ Review each selected file and every direct/related record. Use `source` and opti
 `extract` for drafts; give every affected ID a `replace`, `drop` or `keep` decision
 with a source-backed reason. Stale records cannot be kept. Related records include
 one-hop typed entity neighbors, not an exhaustive dependency graph.
+If a summary compares code with a document, include both files in that record's
+evidence. Mentioning another record ID does not import its evidence hashes or
+freshness checks. Alternatively keep each summary limited to its own cited source.
 
 Apply the reviewed batch with `sync-apply <batch>`, then `index` and a representative
 query. Store batches under `.repo-knowledge/` or outside the target repository.
