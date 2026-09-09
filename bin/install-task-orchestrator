@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SKILLS=(task-orchestrator research-team archon-adversarial-dev test-agent-team)
+RUNTIMES=(.agents .claude .codex)
+
+for skill in "${SKILLS[@]}"; do
+  source="$REPO_ROOT/.claude/skills/$skill"
+  [ -f "$source/SKILL.md" ] || { echo "install-task-orchestrator: missing $source/SKILL.md" >&2; exit 1; }
+  for runtime in "${RUNTIMES[@]}"; do
+    destination="$HOME/$runtime/skills/$skill"
+    if [ -L "$destination" ]; then
+      [ -e "$destination" ] && [ "$(cd "$destination" && pwd -P)" = "$source" ] \
+        || { echo "install-task-orchestrator: refusing to replace $destination" >&2; exit 1; }
+    elif [ -e "$destination" ]; then
+      echo "install-task-orchestrator: refusing to replace $destination" >&2
+      exit 1
+    fi
+  done
+done
+
+for skill in "${SKILLS[@]}"; do
+  source="$REPO_ROOT/.claude/skills/$skill"
+  for runtime in "${RUNTIMES[@]}"; do
+    destination="$HOME/$runtime/skills/$skill"
+    mkdir -p "$(dirname "$destination")"
+    [ -L "$destination" ] || ln -s "$source" "$destination"
+  done
+done
+
+echo "task orchestrator and managed team skills installed for Claude and Codex"

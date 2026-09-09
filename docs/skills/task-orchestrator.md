@@ -6,6 +6,16 @@ opt-in 런타임이다. 현재 구현은 전역 훅이나 네이티브 모델/�
 
 상세 런타임 계약: [runtime-v2.md](../../.claude/skills/task-orchestrator/references/runtime-v2.md)
 
+## 전역 설치
+
+```bash
+bin/install-task-orchestrator
+```
+
+`task-orchestrator`와 직접 관리하는 `research-team`, `archon-adversarial-dev`,
+`test-agent-team`을 `~/.agents/skills`, `~/.claude/skills`, `~/.codex/skills`에
+연결한다. 기존 파일이나 다른 대상을 가리키는 링크는 덮어쓰지 않는다.
+
 ## 빠른 사용
 
 ```bash
