@@ -19,8 +19,10 @@ BINDING = f"""{START}
 Before repository tasks, read `.repo-knowledge/guide.md` and use the installed
 `repo-knowledge` skill to retrieve relevant evidence. Check current source before
 acting; cached knowledge is a navigation aid, not authority. Empty, stale or
-partial results require direct repository search. After changes, invalidate stale
-records and update only knowledge supported by files actually reviewed.
+partial results require direct repository search. After changes, plan reviewed
+paths with `sync-plan`, apply reviewed batches with `sync-apply`, then `index`.
+Use `refresh` only for explicit manual stale deletion after preserving related
+records needed for review.
 {END}"""
 GUIDE = """# Repository knowledge
 
@@ -32,9 +34,14 @@ No absolute installation path is stored here. Knowledge is shared in
 
 Before work: retrieve relevant records, inspect their cited current files and
 applicable repository instructions, and search beyond the index when needed.
-After work: `refresh` removes stale records and lists evidence to re-read; use
-`source` and `put` to replace reviewed facts, then `index` to rebuild PostgreSQL
-vectors. `init` alone builds no knowledge. The skill's .venv supplies vector
+After authorized code work: run `status`, `sync-plan --path <reviewed-file>`,
+review the selected files and related records, write a review batch under
+`.repo-knowledge/`, run `sync-apply <batch>`, then `index`. Use `query` before
+and after when it helps verify retrieval. Do not run `refresh` before planning;
+it is only for explicit manual stale deletion after preserving related records.
+`init --update-guide` backs up an existing guide to `guide.md.bak` before
+installing this workflow; default `init` preserves user guide edits.
+`init` alone builds no knowledge. The skill's .venv supplies vector
 dependencies. REPO_KNOWLEDGE_DSN selects the DB (default: dbname=repo_knowledge).
 Query defaults to hybrid retrieval when indexed; fallback to lexical is reported.
 The first `index` downloads the local multilingual model; queries use its cache.
@@ -115,6 +122,9 @@ def inventory(root):
                                            "--exclude-standard", "-z").split(b"\0") if p)
     sources, excluded = {}, []
     for name in sorted(names):
+        candidate = root.joinpath(*PurePosixPath(name).parts)
+        if not candidate.exists() and not candidate.is_symlink():
+            continue
         try:
             sources[name] = read_source(root, name)
         except (OSError, ValueError):
@@ -175,6 +185,16 @@ def load(root):
         validate_record(record, ontology)
         if key != record["id"]:
             raise ValueError("Record key/id mismatch")
+    if "sync" in data:
+        sync = data["sync"]
+        if not isinstance(sync, dict):
+            raise ValueError("Invalid sync metadata")
+        if type(sync.get("version")) is not int or sync.get("version") != 1 or not isinstance(sync.get("reviewed_files"), dict):
+            raise ValueError("Invalid sync metadata")
+        for path, digest in sync["reviewed_files"].items():
+            relative_path(path)
+            if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise ValueError("Invalid reviewed file SHA-256")
     return data
 
 
@@ -283,7 +303,7 @@ def query(data, sources, excluded, text, limit, root=None, mode="lexical"):
     return {"results": results, "status": state, "retrieval": retrieval, "vectors": vector_state}
 
 
-def initialize(root):
+def initialize(root, update_guide=False):
     changes = []
     # Preflight all bindings before touching any existing instruction file.
     names = ["AGENTS.md", "CLAUDE.md"]
@@ -306,7 +326,19 @@ def initialize(root):
         load(root)
     else:
         save(root, {"version": 1, "ontology": ONTOLOGY, "records": {}})
-    if not guide.exists():
+    if update_guide:
+        backup = safe_path(root, DIRECTORY + "/guide.md.bak")
+        if guide.exists():
+            try:
+                fd = os.open(backup, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            except FileExistsError:
+                raise ValueError("Guide backup already exists: " + str(backup))
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(guide.read_bytes())
+                stream.flush()
+                os.fsync(stream.fileno())
+        atomic_write(guide, GUIDE)
+    elif not guide.exists():
         atomic_write(guide, GUIDE)
     for path, updated in changes:
         atomic_write(path, updated)
@@ -316,8 +348,12 @@ def initialize(root):
 
 def execute(args, root):
     if args.command == "init":
-        return initialize(root)
+        return initialize(root, args.update_guide)
     sources, excluded = inventory(root)
+    if args.command == "sync-plan":
+        import sync
+        return sync.make_plan(data=load(root), sources=sources, excluded=excluded,
+                              selected_paths=args.path)
     if args.command == "source":
         if args.path not in sources:
             raise ValueError("Source is excluded, missing or ignored: " + args.path)
@@ -328,6 +364,28 @@ def execute(args, root):
         return {"path": args.path, "start": args.start, "end": end, "sha256": digest,
                 "text": "\n".join(text.splitlines()[args.start-1:end])}
     data = load(root)
+    if args.command == "sync-apply":
+        import sync
+        review = json.loads(Path(args.input).read_text(encoding="utf-8"))
+        new_data, result = sync.apply_review(data, sources, excluded, review)
+        try:
+            head = git(root, "rev-parse", "HEAD").decode().strip()
+        except subprocess.CalledProcessError:
+            head = None
+        for record_id in result["kept_ids"]:
+            if stale_records({"records": {record_id: data["records"][record_id]}}, sources):
+                raise ValueError("Cannot keep stale record: " + record_id)
+        for record_id in result["stored_ids"]:
+            validate_record(new_data["records"][record_id], new_data["ontology"])
+            if stale_records({"records": {record_id: new_data["records"][record_id]}}, sources):
+                raise ValueError("Evidence changed or invalid; re-read source for " + record_id)
+            new_data["records"][record_id]["indexed_commit"] = head
+        latest_sources, latest_excluded = inventory(root)
+        latest_data = load(root)
+        if sync.snapshot_token(latest_data, latest_sources, latest_excluded) != review.get("base_token"):
+            raise ValueError("Sync snapshot changed; rerun sync-plan")
+        save(root, new_data)
+        return result
     if args.command == "extract":
         if args.path not in sources:
             raise ValueError("Source is excluded, missing or ignored: " + args.path)
@@ -349,7 +407,8 @@ def execute(args, root):
     if args.command == "index":
         import vectors
         stale = stale_records(data, sources)
-        return vectors.build(root, {k: r for k, r in data["records"].items() if k not in stale})
+        return vectors.build(root, {k: r for k, r in data["records"].items() if k not in stale},
+                             rebuild=args.rebuild)
     if args.command == "status":
         return status(data, sources, excluded)
     if args.command == "put":
@@ -380,7 +439,7 @@ def execute(args, root):
         del data["records"][args.id]
         result = {"dropped": args.id}
     save(root, data)
-    result["vectors_next"] = "Run index after reviewing changes to rebuild PostgreSQL vectors."
+    result["vectors_next"] = "Run index after reviewing changes."
     return result
 
 
@@ -388,8 +447,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".", help="Git repository path (subdirectories resolve to root)")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("init", "status", "refresh", "index"):
+    init = commands.add_parser("init")
+    init.add_argument("--update-guide", action="store_true",
+                      help="replace guide.md after exclusively backing up existing guide.md")
+    for name in ("status", "refresh"):
         commands.add_parser(name)
+    index = commands.add_parser("index")
+    index.add_argument("--rebuild", action="store_true", help="rebuild all current fresh vectors")
+    sync_plan = commands.add_parser("sync-plan")
+    sync_plan.add_argument("--path", action="append", help="repository-relative file to review")
     source = commands.add_parser("source")
     source.add_argument("path")
     source.add_argument("--start", type=int, default=1)
@@ -404,6 +470,7 @@ def main():
     search.add_argument("--limit", type=int, default=8)
     search.add_argument("--mode", choices=("auto", "lexical", "vector", "hybrid"), default="auto")
     commands.add_parser("put").add_argument("input", help="JSON array of evidence records")
+    commands.add_parser("sync-apply").add_argument("input", help="JSON review batch")
     commands.add_parser("drop").add_argument("id")
     args = parser.parse_args()
     venv = Path(__file__).resolve().parents[1] / ".venv"
@@ -413,7 +480,7 @@ def main():
             os.execv(str(python), [str(python), str(Path(__file__).resolve()), *sys.argv[1:]])
     try:
         root = Path(os.fsdecode(git(Path(args.repo).resolve(), "rev-parse", "--show-toplevel")).strip()).resolve()
-        if args.command in {"init", "put", "refresh", "drop", "index"}:
+        if args.command in {"init", "put", "refresh", "drop", "index", "sync-apply"}:
             with writer(root):
                 result = execute(args, root)
         else:
