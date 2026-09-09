@@ -3,13 +3,24 @@
 The portable folder can be copied to either runtime's skill directory without
 rewriting instructions. `knowledge.py --help` lists commands. Pass `--repo` before
 the command. `source` and `query` never write; `init`, `put`, `refresh`, `drop` do.
+`index` writes only the derived PostgreSQL vector index.
 
 ## Storage and ontology
 
 `.repo-knowledge/knowledge.json` contains `version: 1`, `ontology`, and `records`
 (an object keyed by record ID). These are local, reviewable project artifacts;
-commit/share them only according to the target repository's policy. No remote
-service receives data from the helper. The host agent still reads retrieved text.
+commit/share them only according to the target repository's policy. Embeddings
+are computed locally; vectors, record IDs and fingerprints are sent only to the
+configured PostgreSQL database. The first `index` may download the embedding
+model. The host agent still reads retrieved text.
+
+PostgreSQL storage is derived, not canonical. The helper uses
+`REPO_KNOWLEDGE_DSN` when set, otherwise database `repo_knowledge`; never store
+credentials in the repository. Rows live under schema `repo_knowledge` and
+are scoped by SHA-256 of the resolved absolute Git root. The vector column is
+`vector(384)`, produced by FastEmbed 0.8.0 with the local multilingual
+`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` model. There is no
+SQLite index.
 
 The default ontology's entity types are `module`, `symbol`, `concept`, `document`,
 `test`, and `config`. Each relation has `from` and `to` lists of allowed types:
@@ -72,6 +83,8 @@ that record, never the entire store. Duplicate IDs in one batch are rejected.
 All records in a batch are validated before saving. Updates use an exclusive
 writer lock and atomic replacement. A crash can leave `.write-lock`; inspect the
 owning activity before removing that lock. Do not run concurrent direct JSON edits.
+Run `index` after `put`, `refresh` or `drop` to transactionally rebuild this
+repository's derived vectors from the current fresh records.
 
 Every record has a nonempty ID/summary, typed subject/object, valid relation,
 `observed` or `inferred` epistemic label, and one or more evidence entries.
@@ -90,11 +103,23 @@ Renames act as missing old sources plus new unrepresented files. Binary files,
 symlinks, common secrets, generated directories, lockfiles and files over 1 MiB are
 excluded. Submodules/nested repositories require a separately declared scope.
 
-`query` ranks case-insensitive query-term matches in summaries, aliases, endpoint
-IDs and relation names. It appends fresh one-hop neighbors, then returns bounded
-results and current excerpts. The caller turns those into a cited answer or plan.
-This is local lexical RAG; there is no automatic AST extraction, embedding service,
-cross-language semantic matcher or exhaustive call-graph guarantee.
+`query --mode lexical` ranks case-insensitive query-term matches in summaries,
+aliases, endpoint IDs and relation names. `query --mode vector` searches exact
+cosine distance over the derived pgvector rows. `query --mode hybrid` combines
+both, and `query --mode auto` uses hybrid when the PostgreSQL index is accessible
+or reports a lexical fallback. Explicit vector and hybrid modes fail when the
+database, extension, index or cached model is unavailable. Results append fresh
+one-hop neighbors, then return bounded records and current excerpts. The caller
+turns those into a cited answer or plan. There is no automatic AST extraction,
+remote embedding service or exhaustive call-graph guarantee.
+
+Every vector candidate must match current evidence hashes and the complete JSON
+record fingerprint before `--limit` is applied. Changed, deleted or replaced
+records cannot be returned from stale vectors. Query never mutates
+`knowledge.json`, the repository, the database schema or vector rows, and never
+downloads the model; the first `index` may download the roughly 0.22 GB model to
+FastEmbed's cache. Semantic similarity is not proof or certainty. No HNSW index is
+created yet.
 
 `evidence_files` means cited files, not full review. `unrepresented_files` and
 `excluded_files` expose gaps. `refresh` invalidates by source content; it cannot
@@ -112,3 +137,20 @@ Nested overrides, runtime instruction limits, or disabled project instructions
 can suppress consultation. Inspect the active instructions in the target scope.
 Bindings guide the agent; they do not enforce actions with hooks. Reopen the
 session when needed to load newly installed skills/project instructions.
+
+## Optional vector setup
+
+Legacy lexical retrieval works with Python 3.9+ and stdlib only. For vector or
+hybrid retrieval, use Python 3.11 with the skill-local venv:
+
+```bash
+cd ~/.claude/skills/repo-knowledge
+uv venv --python 3.11 .venv
+uv pip install --python .venv/bin/python -r requirements.txt
+createdb repo_knowledge
+```
+
+Skip `createdb` if the database already exists, or set `REPO_KNOWLEDGE_DSN` for a
+different configured PostgreSQL database. `index` runs `CREATE EXTENSION IF NOT
+EXISTS vector`; that requires permission, otherwise a DBA must install pgvector
+first.

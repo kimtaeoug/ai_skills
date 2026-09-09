@@ -94,3 +94,33 @@ $TMPDIR/repo-knowledge-live-<run-id>/
   claude/
   codex/
 ```
+
+## 후속 변경: PostgreSQL 벡터 검색
+
+위 CLI 세션 검증은 기존 lexical 구현에 대한 기록이다. 후속 벡터 구현은 로컬
+PostgreSQL 18.4 + pgvector 0.8.2, Python 3.11.15, psycopg 3.3.5,
+FastEmbed 0.8.0으로 별도 검사했다. 모델은
+`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`(384차원)이다.
+JSON이 정본이고 DB는 레포별 파생 인덱스다.
+
+```bash
+python3 tests/test-repo-knowledge.py
+/usr/bin/python3 tests/test-repo-knowledge.py
+~/.claude/skills/repo-knowledge/.venv/bin/python tests/test-repo-knowledge-vectors.py
+```
+
+통과 항목:
+
+- 한국어 비밀번호 복구 질문: lexical 결과 0건, vector/hybrid 첫 결과는 영어 복구 근거.
+- 소스 변경·삭제·레코드 교체·drop 후 오래된 벡터 제외, LIMIT 1 이전 필터링.
+- 다른 레포 네임스페이스 분리, 잘못된 벡터 차원으로 갱신 실패 시 기존 인덱스 롤백.
+- 조회 전후 DB 행 동일, HTTP 요청을 차단해도 캐시된 모델 추론 성공.
+- 빈 인덱스 재구축, 누락된 인덱스의 명시적 vector 오류 및 auto lexical fallback.
+- 전역 Codex 별칭에서 기본 Python 3.14로 CLI를 호출하고 공용 `.venv`로
+  자동 전환한 상태에서도 벡터 검사 전체 통과. Claude 경로와 두 Codex 별칭은
+  동일 설치본을 가리키고 원본 파일과 바이트 단위로 일치했다.
+
+독립 코드 리뷰, Python 컴파일, whitespace 검사도 통과했다. 새 벡터 버전으로
+Claude/Codex 에이전트의 전체 업무 세션을 다시 실행한 것은 아니며, 이번 검사는
+공용 helper와 전역 경로에 대한 실제 DB 통합 검사다. 대규모 성능 측정과 HNSW는
+포함하지 않았다. 테스트 레포의 DB 행은 종료 시 제거했다.

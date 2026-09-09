@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Portable repository evidence store. Python 3.9+ and Git; no network calls."""
+"""Portable evidence store with optional local embeddings and PostgreSQL/pgvector."""
 import argparse
 from contextlib import contextmanager
 import hashlib
@@ -8,6 +8,7 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
+import sys
 import tempfile
 
 
@@ -32,7 +33,11 @@ No absolute installation path is stored here. Knowledge is shared in
 Before work: retrieve relevant records, inspect their cited current files and
 applicable repository instructions, and search beyond the index when needed.
 After work: `refresh` removes stale records and lists evidence to re-read; use
-`source` and `put` to replace reviewed facts. `init` alone builds no knowledge.
+`source` and `put` to replace reviewed facts, then `index` to rebuild PostgreSQL
+vectors. `init` alone builds no knowledge. The skill's .venv supplies vector
+dependencies. REPO_KNOWLEDGE_DSN selects the DB (default: dbname=repo_knowledge).
+Query defaults to hybrid retrieval when indexed; fallback to lexical is reported.
+The first `index` downloads the local multilingual model; queries use its cache.
 
 If the skill or Python is unavailable, search the JSON as a navigation aid and
 read the actual source. Do not trust stored summaries without checking the source.
@@ -219,7 +224,7 @@ def status(data, sources, excluded):
             "coverage_note": "Evidence files are not a completeness or full-review claim."}
 
 
-def query(data, sources, excluded, text, limit):
+def query(data, sources, excluded, text, limit, root=None, mode="lexical"):
     if limit < 1 or limit > 50:
         raise ValueError("limit must be between 1 and 50")
     terms = set(re.findall(r"\w+", text.casefold()))
@@ -232,9 +237,32 @@ def query(data, sources, excluded, text, limit):
         score = sum(term in haystack for term in terms)
         if score:
             scores[key] = score
-    direct = sorted(scores, key=lambda k: (-scores[k], k))[:limit]
+    lexical = sorted(scores, key=lambda k: (-scores[k], k))[:limit]
+    direct = lexical
+    retrieval = "lexical + one-hop; agent generates cited answer"
+    vector_state = {"backend": "disabled"}
+    if mode != "lexical":
+        import vectors
+        try:
+            hits, vector_state = vectors.search(root, fresh, text, limit)
+            ranked = [k for k, _ in hits]
+            if mode == "vector":
+                direct = ranked
+            else:
+                fused = {}
+                for ranking in (lexical, ranked):
+                    for rank, key in enumerate(ranking, 1):
+                        fused[key] = fused.get(key, 0) + 1 / (60 + rank)
+                direct = sorted(fused, key=lambda k: (-fused[k], k))[:limit]
+            retrieval = ("vector" if mode == "vector" else "hybrid (lexical + vector RRF)") + " + one-hop"
+            vector_state["distances"] = dict(hits)
+        except ValueError as error:
+            if mode != "auto":
+                raise
+            vector_state = {"backend": "unavailable", "fallback": "lexical", "reason": str(error)}
     endpoints = {(fresh[k][side]["type"], fresh[k][side]["id"]) for k in direct for side in ("subject", "object")}
-    neighbors = sorted(k for k, r in fresh.items() if k not in scores
+    matched = set(direct) | set(scores) if mode != "vector" else set(direct)
+    neighbors = sorted(k for k, r in fresh.items() if k not in matched
                        and any((r[side]["type"], r[side]["id"]) in endpoints for side in ("subject", "object")))
     # ponytail: linear lexical scan + one hop; use a measured index when corpus latency demands it.
     results = []
@@ -242,14 +270,14 @@ def query(data, sources, excluded, text, limit):
         record = fresh[key]
         excerpts = [{**s, "text": "\n".join(sources[s["path"]][0].splitlines()[s["start"]-1:s["end"]])}
                     for s in record["evidence"]]
-        results.append({"match": "direct" if key in scores else "neighbor",
+        results.append({"match": "direct" if key in direct else "neighbor",
                         "record": record, "excerpts": excerpts})
     # Keep ordinary task context small; full coverage details remain in `status`.
     for key in ("evidence_files", "unrepresented_files", "excluded_files", "stale"):
         value = state[key]
         state[key + "_count"] = len(value)
         state[key] = dict(list(value.items())[:20]) if isinstance(value, dict) else value[:20]
-    return {"results": results, "status": state, "retrieval": "lexical + one-hop; agent generates cited answer"}
+    return {"results": results, "status": state, "retrieval": retrieval, "vectors": vector_state}
 
 
 def initialize(root):
@@ -298,7 +326,11 @@ def execute(args, root):
                 "text": "\n".join(text.splitlines()[args.start-1:end])}
     data = load(root)
     if args.command == "query":
-        return query(data, sources, excluded, args.text, args.limit)
+        return query(data, sources, excluded, args.text, args.limit, root, args.mode)
+    if args.command == "index":
+        import vectors
+        stale = stale_records(data, sources)
+        return vectors.build(root, {k: r for k, r in data["records"].items() if k not in stale})
     if args.command == "status":
         return status(data, sources, excluded)
     if args.command == "put":
@@ -329,6 +361,7 @@ def execute(args, root):
         del data["records"][args.id]
         result = {"dropped": args.id}
     save(root, data)
+    result["vectors_next"] = "Run index after reviewing changes to rebuild PostgreSQL vectors."
     return result
 
 
@@ -336,7 +369,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".", help="Git repository path (subdirectories resolve to root)")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("init", "status", "refresh"):
+    for name in ("init", "status", "refresh", "index"):
         commands.add_parser(name)
     source = commands.add_parser("source")
     source.add_argument("path")
@@ -345,12 +378,18 @@ def main():
     search = commands.add_parser("query")
     search.add_argument("text")
     search.add_argument("--limit", type=int, default=8)
+    search.add_argument("--mode", choices=("auto", "lexical", "vector", "hybrid"), default="auto")
     commands.add_parser("put").add_argument("input", help="JSON array of evidence records")
     commands.add_parser("drop").add_argument("id")
     args = parser.parse_args()
+    venv = Path(__file__).resolve().parents[1] / ".venv"
+    python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if (args.command == "index" or (args.command == "query" and args.mode != "lexical")):
+        if python.is_file() and Path(sys.prefix).resolve() != venv.resolve():
+            os.execv(str(python), [str(python), str(Path(__file__).resolve()), *sys.argv[1:]])
     try:
         root = Path(os.fsdecode(git(Path(args.repo).resolve(), "rev-parse", "--show-toplevel")).strip()).resolve()
-        if args.command in {"init", "put", "refresh", "drop"}:
+        if args.command in {"init", "put", "refresh", "drop", "index"}:
             with writer(root):
                 result = execute(args, root)
         else:
